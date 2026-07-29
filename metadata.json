@@ -1,0 +1,8 @@
+{
+  "name": "Remix Huyền Tình Ký",
+  "description": "Ứng dụng viết tiểu thuyết mạng Việt Nam chuyên nghiệp sử dụng AI. Hỗ trợ thiết lập thế giới, xây dựng dàn nhân vật chi tiết, quy tắc văn phong tự do và trình sáng tác truyện tối ưu.",
+  "requestFramePermissions": [],
+  "majorCapabilities": [
+    "MAJOR_CAPABILITY_SERVER_SIDE_GEMINI_API"
+  ]
+}
