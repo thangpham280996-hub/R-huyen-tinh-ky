@@ -92,7 +92,7 @@ export const handler: Handler = async (event) => {
         : String(prompt);
       messages.push({ role: "user", content: userContent });
 
-      // 👈 SỬA: Chỉ thử 1 model duy nhất, không vòng lặp
+      // 👈 Chỉ thử 1 model duy nhất, không vòng lặp
       const model = customModel?.trim() || DEFAULT_MODELS[0];
 
       const response = await fetch(endpoint, {
@@ -104,7 +104,7 @@ export const handler: Handler = async (event) => {
         body: JSON.stringify({
           model,
           messages,
-          max_tokens: 8192,
+          max_tokens: 16000, // 👈 Tăng từ 8192 lên 16000
           temperature: 0.9,
           stream: false,
         }),

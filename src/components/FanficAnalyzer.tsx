@@ -12,10 +12,20 @@ interface FanficAnalyzerProps {
   onClose: () => void;
 }
 
+// 👈 SỬA: Mở rộng interface AnalyzedCharacter
 interface AnalyzedCharacter {
-  name: string; gender: string; age: string; role: string;
-  appearance: string; personality: string; backStory: string;
-  currentStatus: string; additionalInfo: string;
+  name: string;
+  gender: string;
+  age: string;
+  role: string;
+  importance?: string; // 👈 MỚI: cao/trung bình/thấp
+  appearance: string;
+  personality: string;
+  backStory: string;
+  currentStatus: string;
+  additionalInfo: string;
+  relationships?: string; // 👈 MỚI: mối quan hệ với nhân vật khác
+  keyEvents?: string;     // 👈 MỚI: sự kiện quan trọng
 }
 
 interface AnalyzedWorld {
@@ -24,11 +34,13 @@ interface AnalyzedWorld {
 
 interface AnalysisResult {
   title: string; genres: string[]; context: string; writingStyle: string;
-  narrativeVoice: string; // Ngôi kể + giọng điệu + nhịp câu của tác phẩm gốc — dùng để "xào nấu" góc nhìn khi viết truyện mới
-  characters: AnalyzedCharacter[]; worldEntities: AnalyzedWorld[]; loreNotes: string;
+  narrativeVoice: string;
+  characters: AnalyzedCharacter[];
+  worldEntities: AnalyzedWorld[];
+  loreNotes: string;
 }
 
-const CHUNK_SIZE = 14000; // Tăng từ 6000 → giảm ~60% số lượt gọi AI, giảm mạnh tổng thời gian chờ giãn cách giữa các lượt
+const CHUNK_SIZE = 14000;
 const CHARS_PER_CALL = 14000;
 
 function estimateCalls(textLength: number): number {
@@ -41,7 +53,6 @@ function formatFileSize(bytes: number): string {
   return `${(bytes / (1024 * 1024)).toFixed(2)} MB`;
 }
 
-// ─── Trích thời gian chờ Google/proxy yêu cầu trong lỗi 429 (VD: "retryDelay":"36s") ──
 function parseRetryDelayMs(message: string): number | null {
   if (!message) return null;
   const m1 = message.match(/"retryDelay":"(\d+(?:\.\d+)?)s"/);
@@ -54,22 +65,19 @@ function parseRetryDelayMs(message: string): number | null {
   return null;
 }
 
-// ─── Khoảng cách an toàn giữa các lượt gọi, theo giới hạn RPM (số lượt/phút) của từng nhà cung cấp ──
-// Dashboard beijixingxing hiển thị: CLI RPM 3, AG RPM 5 → gọi dồn dập sẽ bị 429 dù quota tổng còn rất nhiều.
 function getSafeGapMs(provider?: string): number {
   switch (provider) {
-    case 'catiecli':    return 21000; // RPM 3 → tối thiểu 20s/lượt, có buffer
-    case 'antigravity': return 13000; // RPM 5 → tối thiểu 12s/lượt, có buffer
-    case 'gemini':      return 4500;  // Gemini free tier trực tiếp, RPM thường cao hơn
-    default:            return 6000;  // openai/claude/grok qua proxy — mặc định thận trọng
+    case 'catiecli':    return 21000;
+    case 'antigravity': return 13000;
+    case 'gemini':      return 4500;
+    default:            return 6000;
   }
 }
 
-// ─── Key có đang "nghỉ" do vừa báo hết quota theo NGÀY không? Tự hết hạn sau 6 tiếng thay vì khoá vĩnh viễn ──
 const QUOTA_COOLDOWN_MS = 6 * 60 * 60 * 1000;
 function isKeyOnCooldown(k: any): boolean {
   if (!k.quotaExceeded) return false;
-  if (!k.quotaExceededAt) return true; // dữ liệu cũ chưa có timestamp — vẫn coi là nghỉ, cần bấm Test thủ công
+  if (!k.quotaExceededAt) return true;
   return Date.now() - k.quotaExceededAt < QUOTA_COOLDOWN_MS;
 }
 
@@ -92,7 +100,9 @@ async function callAI(prompt: string, systemInstruction: string, apiKeys: any[])
     headers: { 'Content-Type': 'application/json' },
     body: JSON.stringify(body),
   });
-    const rawText = await res.text();
+
+  // 👈 ĐÃ SỬA: Đọc text trước, kiểm tra, rồi mới parse
+  const rawText = await res.text();
   let data: any;
   try {
     data = JSON.parse(rawText);
@@ -109,8 +119,6 @@ async function callAI(prompt: string, systemInstruction: string, apiKeys: any[])
 async function callAIWithRetry(prompt: string, systemInstruction: string, apiKeys: any[], updateState: any, maxRetries = 5): Promise<string> {
   const usableKeys = apiKeys.filter((k: any) => k.isActive && !isKeyOnCooldown(k));
 
-  // Người dùng ĐÃ cấu hình key riêng nhưng tất cả đều đang "nghỉ" — TUYỆT ĐỐI không được âm thầm
-  // rớt về key mặc định của hosting (key đó chỉ 20 lượt/ngày, dùng chung mọi người, sẽ hết ngay lập tức).
   if (apiKeys.length > 0 && usableKeys.length === 0) {
     throw new Error(
       'ALL_KEYS_COOLDOWN::Tất cả API Key bạn đã thêm đều đang tạm nghỉ do vừa báo hết quota. ' +
@@ -125,7 +133,6 @@ async function callAIWithRetry(prompt: string, systemInstruction: string, apiKey
     for (let attempt = 0; attempt < maxRetries; attempt++) {
       try {
         const text = await callAI(prompt, systemInstruction, key ? [key] : apiKeys);
-        // Gọi thành công — nếu key từng bị đánh dấu nghỉ, gỡ nhãn ngay
         if (key?.quotaExceeded) {
           key.quotaExceeded = false;
           key.quotaExceededAt = undefined;
@@ -142,7 +149,6 @@ async function callAIWithRetry(prompt: string, systemInstruction: string, apiKey
         const isDailyQuota = /perday/i.test(msg);
 
         if (is429 && isDailyQuota) {
-          // Hết quota theo NGÀY — chờ ngay tại đây vô ích, chuyển sang key khác (nếu còn) thay vì lặp lại
           if (key) {
             key.quotaExceeded = true;
             key.quotaExceededAt = Date.now();
@@ -151,18 +157,16 @@ async function callAIWithRetry(prompt: string, systemInstruction: string, apiKey
               if (targetKey) { targetKey.quotaExceeded = true; targetKey.quotaExceededAt = Date.now(); }
             });
           }
-          break; // ra khỏi vòng attempt, thử key tiếp theo trong danh sách
+          break;
         }
 
         if (is429) {
-          // Giới hạn tốc độ (RPM) tạm thời — CHỜ đúng thời gian Google/proxy yêu cầu rồi thử lại CÙNG key
           const suggested = parseRetryDelayMs(msg);
-          const backoff = suggested ?? Math.min(60000, 2000 * Math.pow(2, attempt)); // 2s,4s,8s,16s,32s,60s
+          const backoff = suggested ?? Math.min(60000, 2000 * Math.pow(2, attempt));
           await new Promise((r) => setTimeout(r, backoff + 500));
-          continue; // thử lại cùng key
+          continue;
         }
 
-        // Lỗi khác (mạng chập chờn, 500, v.v.) — chờ ngắn rồi thử lại
         await new Promise((r) => setTimeout(r, 1500 * (attempt + 1)));
       }
     }
@@ -170,11 +174,30 @@ async function callAIWithRetry(prompt: string, systemInstruction: string, apiKey
   throw lastErr || new Error('Tất cả model/key đều hết quota hoặc lỗi.');
 }
 
+// ─── 👈 SỬA: analyzeChunkWithRetry với schema mở rộng ────────────────────
 async function analyzeChunkWithRetry(chunk: string, chunkIndex: number, totalChunks: number, apiKeys: any[], updateState: any): Promise<string> {
   const system = `Bạn là chuyên gia phân tích tiểu thuyết. Đọc đoạn văn (phần ${chunkIndex + 1}/${totalChunks}).
+
+⚠️ BẮT BUỘC trích xuất ĐẦY ĐỦ mọi nhân vật xuất hiện, kể cả nhân vật chỉ thoáng qua nhưng có tên riêng — không chỉ nhân vật chính. Bao gồm: nhân vật phụ, phản diện, kẻ phản bội/nội gián, nhân vật có động cơ/mục đích riêng dù xuất hiện ngắn.
+
+Với MỖI nhân vật, viết CHI TIẾT (2-4 câu mỗi trường, không viết cụt lủn 1-2 từ):
 Trả về JSON với format:
 {
-  "characters": [{"name":"...","role":"...","appearance":"...","personality":"...","gender":"Nam/Nữ","age":"...","backstory":"...","status":"..."}],
+  "characters": [
+    {
+      "name": "...",
+      "role": "Vai trò trong cốt truyện (chính/phụ/phản diện/phản bội...)",
+      "importance": "cao/trung bình/thấp",
+      "appearance": "Mô tả ngoại hình cụ thể nếu có nhắc tới (chi tiết về trang phục, vóc dáng, khuôn mặt, đặc điểm nổi bật)",
+      "personality": "Tính cách thể hiện qua hành động/lời nói trong đoạn này (nóng tính, lạnh lùng, gian xảo, thông minh, ngây thơ...)",
+      "gender": "Nam/Nữ/Không rõ",
+      "age": "Tuổi hoặc khoảng tuổi (thiếu niên/trung niên/già...)",
+      "backstory": "Thân thế, quá khứ được tiết lộ trong đoạn (nếu có, viết chi tiết 2-3 câu)",
+      "status": "Trạng thái/vị trí hiện tại trong mạch truyện ở đoạn này (đang làm gì, ở đâu, tâm trạng thế nào)",
+      "relationships": "Mối quan hệ với các nhân vật khác được nhắc tới trong đoạn (VD: là đối thủ của A, là đồng minh của B, là người tình của C...)",
+      "keyEvents": "Sự kiện/hành động quan trọng nhân vật này làm hoặc tham gia trong đoạn"
+    }
+  ],
   "worldEntities": [{"name":"...","type":"sect/family/place/power/system/other","description":"..."}],
   "plotPoints": ["sự kiện 1", "sự kiện 2"],
   "lore": "hệ thống tu luyện, thuật ngữ",
@@ -189,7 +212,7 @@ CHỈ TRẢ JSON THUẦN, không markdown.`;
   return raw.replace(/```json\n?/g, '').replace(/```\n?/g, '').trim();
 }
 
-// ─── CƠ CHẾ JS TIỀN HỢP NHẤT ──────────────────────────────────────────
+// ─── 👈 SỬA: preMergeChunks - bỏ giới hạn 400 ký tự ──────────────────────
 function preMergeChunks(chunkResults: string[]) {
   const charMap = new Map<string, any[]>();
   const worldMap = new Map<string, any[]>();
@@ -225,17 +248,29 @@ function preMergeChunks(chunkResults: string[]) {
   });
 
   let summarizedText = `### NHÂN VẬT ĐÃ NHÓM ###\n`;
-  charMap.forEach((instances, name) => {
+
+  // Sắp xếp: nhân vật quan trọng lên trước
+  const sortedChars = Array.from(charMap.entries()).sort((a, b) => {
+    const aImportance = a[1].some((i: any) => i.importance === 'cao') ? 0 : 1;
+    const bImportance = b[1].some((i: any) => i.importance === 'cao') ? 0 : 1;
+    return aImportance - bImportance;
+  });
+
+  sortedChars.forEach(([name, instances]) => {
     const roles = [...new Set(instances.map(i => i.role).filter(Boolean))].join(', ');
-    const info = instances.map(i => i.backstory || i.personality || i.additionalInfo).filter(Boolean).join('; ');
-    summarizedText += `- ${name}: Vai trò (${roles}). Thông tin: ${info.substring(0, 400)}...\n`;
+    // 👈 SỬA: Bỏ .substring(0, 400) — giữ nguyên toàn bộ thông tin
+    const info = instances.map(i =>
+      i.backstory || i.personality || i.additionalInfo || i.relationships || i.keyEvents
+    ).filter(Boolean).join('; ');
+    summarizedText += `- ${name}: Vai trò (${roles}). Thông tin: ${info}\n`;
   });
 
   summarizedText += `\n### THẾ LỰC ĐÃ NHÓM ###\n`;
   worldMap.forEach((instances, name) => {
     const types = [...new Set(instances.map(i => i.type).filter(Boolean))].join(', ');
     const desc = instances.map(i => i.description).filter(Boolean).join('; ');
-    summarizedText += `- ${name}: Loại (${types}). Mô tả: ${desc.substring(0, 400)}...\n`;
+    // 👈 SỬA: Bỏ .substring(0, 400) cho thế lực
+    summarizedText += `- ${name}: Loại (${types}). Mô tả: ${desc}\n`;
   });
 
   summarizedText += `\n### LORE & CỐT TRUYỆN CHÍNH ###\nLORE: ${loreNotes.slice(0, 20).join('; ')}\nSỰ KIỆN: ${plotPoints.slice(0, 30).join('; ')}`;
@@ -244,6 +279,7 @@ function preMergeChunks(chunkResults: string[]) {
   return summarizedText;
 }
 
+// ─── 👈 SỬA: synthesizeResults với BATCH_SIZE=15 và prompt mới ────────────
 async function synthesizeResults(
   chunkResults: string[],
   workTitle: string,
@@ -251,44 +287,68 @@ async function synthesizeResults(
   updateState: any,
   onProgress?: (msg: string) => void
 ): Promise<AnalysisResult> {
-  const BATCH_SIZE = 25; // Số đoạn thô gộp mỗi lần gọi AI trung gian — chỉnh nếu vẫn timeout thì giảm xuống 15
+  const BATCH_SIZE = 15; // Giảm từ 25 xuống 15
 
-  // ── Bước 1: Tổng hợp từng nhóm nhỏ thành summary ngắn (gọi AI nhiều lần nhỏ) ──
+  // ── Bước 1: Tổng hợp từng nhóm nhỏ ──
   const batchSummaries: string[] = [];
   for (let i = 0; i < chunkResults.length; i += BATCH_SIZE) {
     const batch = chunkResults.slice(i, i + BATCH_SIZE);
-    const batchText = preMergeChunks(batch); // vẫn dùng hàm gộp local có sẵn, không đổi
+    const batchText = preMergeChunks(batch);
 
     if (onProgress) {
       onProgress(`Tổng hợp nhóm ${Math.floor(i / BATCH_SIZE) + 1}/${Math.ceil(chunkResults.length / BATCH_SIZE)}...`);
     }
 
+    // 👈 SỬA: Prompt batch - KHÔNG được xóa bỏ nhân vật
     const systemBatch = `Bạn là AI tóm tắt dữ liệu tiểu thuyết. Nhận dữ liệu thô đã gộp nhóm từ một phần truyện.
-Nhiệm vụ: rút gọn còn các nhân vật/thế lực/sự kiện QUAN TRỌNG NHẤT, loại trùng lặp trong nhóm này.
+Nhiệm vụ: loại trùng lặp (CÙNG 1 nhân vật xuất hiện nhiều lần → gộp thành 1), KHÔNG được xóa bỏ bất kỳ nhân vật/thế lực nào có tên riêng dù chỉ xuất hiện 1 lần với vai trò nhỏ — giữ nguyên toàn bộ danh sách, chỉ gộp trùng.
 Trả về JSON CÙNG FORMAT với dữ liệu đầu vào (characters, worldEntities, plotPoints, lore, genres, pov, narratorVoice). CHỈ TRẢ JSON THUẦN.`;
 
     const raw = await callAIWithRetry(batchText, systemBatch, apiKeys, updateState);
     batchSummaries.push(raw.replace(/```json\n?/g, '').replace(/```\n?/g, '').trim());
 
-    // Tránh gọi dồn dập giữa các nhóm
     if (i + BATCH_SIZE < chunkResults.length) {
       await new Promise(r => setTimeout(r, 2000));
     }
   }
 
-  // ── Bước 2: Gộp các summary (đã ngắn hơn rất nhiều) rồi gọi AI lần cuối ──
+  // ── Bước 2: Tổng hợp cuối cùng ──
   const finalText = preMergeChunks(batchSummaries);
-  
+
+  // 👈 SỬA: Prompt tổng hợp cuối - "HỢP NHẤT đầy đủ" thay vì "chắt lọc"
   const system = `Bạn là AI tổng hợp phân tích tiểu thuyết. Nhận dữ liệu ĐÃ ĐƯỢC GỘP NHÓM từ nhiều chương.
-Nhiệm vụ: Chắt lọc, loại bỏ trùng lặp triệt để và viết lại thành 1 hồ sơ JSON hoàn chỉnh, logic nhất.
+
+⚠️ QUY TẮC QUAN TRỌNG:
+1. GIỮ ĐẦY ĐỦ tất cả nhân vật/thế lực có tên riêng xuất hiện trong dữ liệu — kể cả vai trò nhỏ/phụ
+2. KHÔNG được lược bỏ nhân vật nào chỉ vì ít thông tin hoặc xuất hiện ít
+3. HỢP NHẤT đầy đủ mọi thông tin về từng nhân vật/thế lực từ các lần xuất hiện khác nhau thành 1 hồ sơ chi tiết, liền mạch
+4. Không tóm tắt ngắn lại, không bỏ sót chi tiết nào đã có trong dữ liệu đầu vào
+5. Chỉ loại các câu trùng lặp ý nghĩa
+6. Viết mỗi trường 3-5 câu nếu dữ liệu cho phép
+
 Trả về JSON với format:
 {
-  "title": "tên tác phẩm", 
-  "genres": ["thể loại"], 
-  "context": "bối cảnh cốt truyện", 
+  "title": "tên tác phẩm",
+  "genres": ["thể loại"],
+  "context": "bối cảnh cốt truyện",
   "writingStyle": "văn phong",
   "narrativeVoice": "Tổng hợp NGÔI KỂ chính của toàn truyện (ngôi 1/ngôi 3 giới hạn/ngôi 3 toàn tri) + giọng điệu người kể (hài hước/u uất/lạnh lùng...) + nhịp câu (ngắn gấp/dài trữ tình) + các tật ngôn ngữ hoặc mô-típ miêu tả lặp lại đặc trưng. Viết thành 1 đoạn mô tả rõ ràng, đủ chi tiết để một AI khác có thể bắt chước giọng văn này.",
-  "characters": [{"name":"...","gender":"Nam/Nữ","age":"...","role":"...","appearance":"...","personality":"...","backStory":"...","currentStatus":"...","additionalInfo":"..."}],
+  "characters": [
+    {
+      "name": "...",
+      "gender": "Nam/Nữ",
+      "age": "...",
+      "role": "...",
+      "importance": "cao/trung bình/thấp",
+      "appearance": "...",
+      "personality": "...",
+      "backStory": "...",
+      "currentStatus": "...",
+      "additionalInfo": "...",
+      "relationships": "...",
+      "keyEvents": "..."
+    }
+  ],
   "worldEntities": [{"name":"...","type":"sect/family/place/power/system/other","description":"..."}],
   "loreNotes": "hệ thống tu luyện, thuật ngữ"
 }
@@ -318,17 +378,12 @@ export default function FanficAnalyzer({ state, updateState, onClose }: FanficAn
   const [chunkResults, setChunkResults] = useState<string[]>([]);
   const [importedProgressName, setImportedProgressName] = useState<string | null>(null);
 
-  // ★ MỚI: file .txt vừa upload là TOÀN VĂN đầy đủ (mặc định true) hay chỉ chứa phần MỚI chưa phân tích.
-  // Khi true và đang có tiến trình cũ (chunkResults.length > 0), app sẽ tự bỏ qua các đoạn đã xử lý
-  // thay vì phân tích lại từ đầu — đây là fix cho lỗi "chạy tiếp bị đếm lại từ đầu".
   const [isFullFile, setIsFullFile] = useState(true);
 
-  // ── Gộp nhiều file tiến trình (VD: 3 file JSON của cùng 1 bộ truyện) ──
   const [pendingProgressFiles, setPendingProgressFiles] = useState<
     { id: string; name: string; chunkResults: string[]; workName?: string }[]
   >([]);
 
-  // ── Dừng thủ công khi đang chạy ──
   const stopRequestedRef = useRef(false);
   const [stopRequested, setStopRequested] = useState(false);
   const [stoppedManually, setStoppedManually] = useState(false);
@@ -341,17 +396,15 @@ export default function FanficAnalyzer({ state, updateState, onClose }: FanficAn
 
   const estimatedCalls = mode === 'file' && fileContent ? estimateCalls(fileContent.length) : mode === 'name' ? 1 : 0;
 
-  // ★ Số đoạn sẽ được bỏ qua nếu tick "toàn văn" khi có tiến trình cũ — dùng để hiển thị cho người dùng thấy rõ
   const skippableChunkCount = fileContent
     ? Math.min(chunkResults.length, Math.ceil(fileContent.length / CHUNK_SIZE))
     : 0;
 
-  // ── Xử lý File txt ──
   const handleFileUpload = useCallback((e: React.ChangeEvent<HTMLInputElement>) => {
     const file = e.target.files?.[0];
     if (!file) return;
     setError(null);
-    if (!importedProgressName) setChunkResults([]); // Chỉ reset nếu chưa import file json nối tiến trình
+    if (!importedProgressName) setChunkResults([]);
     const reader = new FileReader();
     reader.onload = (ev) => {
       setFileContent(ev.target?.result as string);
@@ -363,7 +416,6 @@ export default function FanficAnalyzer({ state, updateState, onClose }: FanficAn
     e.target.value = '';
   }, [importedProgressName, workName]);
 
-  // ── Xử lý File JSON tiến trình — hỗ trợ chọn NHIỀU file cùng lúc để gộp ──
   const handleImportProgress = useCallback((e: React.ChangeEvent<HTMLInputElement>) => {
     const files = Array.from(e.target.files || []);
     if (files.length === 0) return;
@@ -407,7 +459,6 @@ export default function FanficAnalyzer({ state, updateState, onClose }: FanficAn
     e.target.value = '';
   }, []);
 
-  // ── Đổi vị trí file trong danh sách chờ gộp (sắp đúng thứ tự chương trước-sau) ──
   const movePendingFile = (idx: number, dir: -1 | 1) => {
     setPendingProgressFiles((prev) => {
       const arr = [...prev];
@@ -422,7 +473,6 @@ export default function FanficAnalyzer({ state, updateState, onClose }: FanficAn
     setPendingProgressFiles((prev) => prev.filter((f) => f.id !== id));
   };
 
-  // ── Gộp tất cả file đang chờ thành 1 tiến trình duy nhất, theo đúng thứ tự đã sắp ──
   const handleMergePendingFiles = () => {
     if (pendingProgressFiles.length === 0) return;
     const merged = pendingProgressFiles.flatMap((f) => f.chunkResults);
@@ -434,7 +484,6 @@ export default function FanficAnalyzer({ state, updateState, onClose }: FanficAn
     setError(null);
   };
 
-  // ── Tải JSON xuống máy (Export Checkpoint) ──
   const handleDownloadProgress = () => {
     const dataStr = JSON.stringify({ workName, chunkResults, timestamp: new Date().toISOString() }, null, 2);
     const blob = new Blob([dataStr], { type: 'application/json' });
@@ -445,7 +494,6 @@ export default function FanficAnalyzer({ state, updateState, onClose }: FanficAn
     a.click();
   };
 
-  // ── Yêu cầu dừng thủ công — chờ xong đoạn đang gọi dở rồi mới dừng ──
   const handleRequestStop = () => {
     stopRequestedRef.current = true;
     setStopRequested(true);
@@ -467,16 +515,9 @@ export default function FanficAnalyzer({ state, updateState, onClose }: FanficAn
 
       const previousChunkCount = resume ? chunkResults.length : 0;
 
-      // ★ FIX CHÍNH: nếu đang resume VÀ file upload là toàn văn đầy đủ (isFullFile),
-      // các đoạn đầu tiên của "chunks" (được cắt lại từ fileContent) trùng với các đoạn
-      // đã phân tích trong chunkResults — bỏ qua chúng thay vì gọi AI lại từ đầu.
-      // Nếu isFullFile = false (file chỉ chứa phần mới), giữ nguyên hành vi cũ: chạy từ i = 0.
       const skipCount = (resume && isFullFile) ? Math.min(previousChunkCount, chunks.length) : 0;
       const startIndex = skipCount;
 
-      // Khi đã bỏ qua theo skipCount, previousChunkCount không còn cần cộng dồn vào total nữa
-      // (vì các đoạn đó nằm trong chunks.length của lần chạy này). Chỉ cộng dồn khi KHÔNG bỏ qua
-      // (trường hợp file mới chỉ chứa phần tiếp theo, previousChunkCount là số đoạn "ngoài" chunks).
       const total = skipCount > 0
         ? chunks.length + 1
         : chunks.length + previousChunkCount + 1;
@@ -485,7 +526,6 @@ export default function FanficAnalyzer({ state, updateState, onClose }: FanficAn
       if (!resume) setChunkResults([]);
 
       let stoppedEarly = false;
-      // Giãn cách theo giới hạn RPM thực tế của nhà cung cấp đang dùng — tránh gọi dồn dập gây 429
       const activeProvider = state.apiKeys.find((k: any) => k.isActive)?.provider;
       const safeGapMs = getSafeGapMs(activeProvider);
 
@@ -494,14 +534,11 @@ export default function FanficAnalyzer({ state, updateState, onClose }: FanficAn
       }
 
       for (let i = startIndex; i < chunks.length; i++) {
-        // Kiểm tra cờ dừng TRƯỚC khi gọi đoạn tiếp theo — đoạn đang gọi dở vẫn được hoàn tất và lưu
         if (stopRequestedRef.current) {
           stoppedEarly = true;
           break;
         }
 
-        // Chỉ số hiển thị: nếu đã bỏ qua theo skipCount thì global index = i + 1 (đã nằm trong chunks.length,
-        // không cộng thêm previousChunkCount vì sẽ bị đếm 2 lần); nếu không thì cộng dồn như trước.
         const currentGlobalIndex = skipCount > 0 ? (i + 1) : (previousChunkCount + i + 1);
         setProgress({ current: currentGlobalIndex, total, label: `Đọc đoạn mới ${i + 1}/${chunks.length} (Tổng tiến trình: ${currentGlobalIndex})...` });
 
@@ -523,56 +560,54 @@ export default function FanficAnalyzer({ state, updateState, onClose }: FanficAn
 
       setProgress({ current: total - 1, total, label: 'Đang gộp và xử lý trùng lặp nhân vật/thế lực...' });
       analysisResult = await synthesizeResults(
-      results,
-      workName,
-      state.apiKeys,
-      updateState,
-      (msg: string) => {
-        setProgress(prev => ({ ...prev, label: msg }));
+        results,
+        workName,
+        state.apiKeys,
+        updateState,
+        (msg: string) => {
+          setProgress(prev => ({ ...prev, label: msg }));
+        }
+      );
+
+      setProgress({ current: total, total, label: 'Hoàn tất!' });
+
+      setResult(analysisResult);
+      setSelectedChars(new Set(analysisResult.characters?.map((_, i) => i) || []));
+      setSelectedWorlds(new Set(analysisResult.worldEntities?.map((_, i) => i) || []));
+      setStep('preview');
+
+    } catch (err: any) {
+      const msg = err?.message || 'Lỗi không xác định';
+      if (msg.startsWith('ALL_KEYS_COOLDOWN::')) {
+        setStoppedManually(true);
+        setError(`${msg.replace('ALL_KEYS_COOLDOWN::', '')} Đã lưu an toàn ${chunkResults.length} đoạn.`);
+      } else {
+        setStoppedManually(false);
+        setError(`Lỗi: ${msg}. Đã lưu an toàn ${chunkResults.length} đoạn. Vui lòng bấm Tải Tiến Trình hoặc thử Tiếp Tục.`);
       }
-    );
-
-    setProgress({ current: total, total, label: 'Hoàn tất!' });
-
-    setResult(analysisResult);
-    setSelectedChars(new Set(analysisResult.characters?.map((_, i) => i) || []));
-    setSelectedWorlds(new Set(analysisResult.worldEntities?.map((_, i) => i) || []));
-    setStep('preview');
-
-  } catch (err: any) {
-    const msg = err?.message || 'Lỗi không xác định';
-    if (msg.startsWith('ALL_KEYS_COOLDOWN::')) {
-      setStoppedManually(true);
-      setError(`${msg.replace('ALL_KEYS_COOLDOWN::', '')} Đã lưu an toàn ${chunkResults.length} đoạn.`);
-    } else {
-      setStoppedManually(false);
-      setError(`Lỗi: ${msg}. Đã lưu an toàn ${chunkResults.length} đoạn. Vui lòng bấm Tải Tiến Trình hoặc thử Tiếp Tục.`);
+      setStep('confirm');
     }
-    setStep('confirm');
-  }
-};
+  };
 
-  // ── NHẬP KẾT QUẢ ĐÃ PHÂN TÍCH VÀO DỰ ÁN (đã sửa — trước đây là hàm rỗng) ──
+  // ── NHẬP KẾT QUẢ ĐÃ PHÂN TÍCH VÀO DỰ ÁN ──
   const handleImport = () => {
     if (!result) return;
 
     updateState((prev) => {
-      // ── Nhân vật đã chọn — merge theo tên, tránh tạo trùng ──
       const charsToImport = result.characters.filter((_, i) => selectedChars.has(i));
       charsToImport.forEach((c) => {
         const existing = prev.characters.find(
           pc => pc.name.trim().toLowerCase() === c.name.trim().toLowerCase()
         );
         if (existing) {
-          // Nhân vật đã có sẵn trong dự án — cập nhật, không tạo trùng
-          existing.appearance     = c.appearance || existing.appearance;
-          existing.personality    = c.personality || existing.personality;
-          existing.backStory      = c.backStory || existing.backStory;
-          existing.currentStatus  = c.currentStatus || existing.currentStatus;
+          existing.appearance = c.appearance || existing.appearance;
+          existing.personality = c.personality || existing.personality;
+          existing.backStory = c.backStory || existing.backStory;
+          existing.currentStatus = c.currentStatus || existing.currentStatus;
           existing.additionalInfo = c.additionalInfo || existing.additionalInfo;
-          existing.gender          = existing.gender || c.gender || '';
-          existing.age             = existing.age || c.age || '';
-          existing.role            = existing.role || c.role || '';
+          existing.gender = existing.gender || c.gender || '';
+          existing.age = existing.age || c.age || '';
+          existing.role = existing.role || c.role || '';
         } else {
           prev.characters.push({
             id: Math.random().toString(36).substr(2, 9),
@@ -591,7 +626,6 @@ export default function FanficAnalyzer({ state, updateState, onClose }: FanficAn
         }
       });
 
-      // ── Thế lực / địa danh đã chọn ──
       const worldsToImport = result.worldEntities.filter((_, i) => selectedWorlds.has(i));
       worldsToImport.forEach((w) => {
         const existing = prev.worldEntities.find(
@@ -609,7 +643,6 @@ export default function FanficAnalyzer({ state, updateState, onClose }: FanficAn
         }
       });
 
-      // ── Bối cảnh & thể loại ──
       if (importContext) {
         if (result.context) prev.config.context = result.context;
         if (result.genres?.length) {
@@ -619,14 +652,12 @@ export default function FanficAnalyzer({ state, updateState, onClose }: FanficAn
         if (result.writingStyle) prev.config.writingStyle = result.writingStyle;
         if (!prev.config.title && workName) prev.config.title = workName;
 
-        // Ngôi kể & giọng kể gốc — dùng để "xào nấu" góc nhìn khi viết truyện mới
         if (result.narrativeVoice) {
           prev.config.originalNarrativeVoice = result.narrativeVoice;
           if (!prev.config.targetPOVMode) prev.config.targetPOVMode = 'giu_nguyen';
         }
       }
 
-      // ── Lore ──
       if (importLore && result.loreNotes) {
         if (!prev.rules.loreEntries) prev.rules.loreEntries = [];
         prev.rules.loreEntries.push({
@@ -684,7 +715,6 @@ export default function FanficAnalyzer({ state, updateState, onClose }: FanficAn
                 </button>
               </div>
 
-              {/* Danh sách file tiến trình đang chờ gộp — dùng khi có nhiều file JSON của cùng 1 bộ truyện */}
               {pendingProgressFiles.length > 0 && (
                 <div className="p-3 bg-neutral-950/60 border border-neutral-800 rounded-lg space-y-2">
                   <p className="text-[10px] text-gray-400 leading-relaxed">
@@ -744,7 +774,6 @@ export default function FanficAnalyzer({ state, updateState, onClose }: FanficAn
                   )}
                 </label>
 
-                {/* ★ MỚI: chọn chế độ file khi đang có tiến trình cũ, để tránh phân tích lại từ đầu */}
                 {fileContent && chunkResults.length > 0 && (
                   <div className="p-3 bg-neutral-950/60 border border-neutral-800 rounded-lg space-y-2">
                     <p className="text-[10px] text-gray-400">
@@ -781,7 +810,7 @@ export default function FanficAnalyzer({ state, updateState, onClose }: FanficAn
             </div>
           )}
 
-          {/* ── STEP: CONFIRM (Lỗi Quota & Tải Json) ── */}
+          {/* ── STEP: CONFIRM ── */}
           {step === 'confirm' && (
             <div className="space-y-4">
               <div className="p-4 bg-amber-950/20 border border-amber-800/30 rounded-xl space-y-3">
@@ -809,7 +838,6 @@ export default function FanficAnalyzer({ state, updateState, onClose }: FanficAn
                    </div>
                 </div>
 
-                {/* ★ Nhắc lại chế độ đang chọn để người dùng xác nhận trước khi bấm "Chạy tiếp" */}
                 {chunkResults.length > 0 && fileContent && (
                   <div className="bg-neutral-950/60 p-3 rounded-lg text-[10px] text-gray-400 leading-relaxed">
                     Chế độ hiện tại: <b className="text-amber-300">{isFullFile ? `Toàn bộ truyện — sẽ bỏ qua ${skippableChunkCount} đoạn đầu` : 'Chỉ phần mới — sẽ chạy toàn bộ file này'}</b>.{' '}
@@ -854,7 +882,7 @@ export default function FanficAnalyzer({ state, updateState, onClose }: FanficAn
             </div>
           )}
 
-          {/* ── STEP: PREVIEW — chọn nhân vật/thế lực/bối cảnh trước khi nhập vào dự án ── */}
+          {/* ── STEP: PREVIEW ── */}
           {step === 'preview' && result && (
             <div className="space-y-4">
               <div className="text-center">
@@ -865,7 +893,6 @@ export default function FanficAnalyzer({ state, updateState, onClose }: FanficAn
                 </p>
               </div>
 
-              {/* Chọn nhân vật */}
               {result.characters?.length > 0 && (
                 <div className="bg-neutral-950/60 border border-neutral-800 rounded-xl p-3">
                   <div className="flex items-center justify-between mb-2">
@@ -905,7 +932,6 @@ export default function FanficAnalyzer({ state, updateState, onClose }: FanficAn
                 </div>
               )}
 
-              {/* Chọn thế lực / địa danh */}
               {result.worldEntities?.length > 0 && (
                 <div className="bg-neutral-950/60 border border-neutral-800 rounded-xl p-3">
                   <div className="flex items-center justify-between mb-2">
@@ -945,7 +971,6 @@ export default function FanficAnalyzer({ state, updateState, onClose }: FanficAn
                 </div>
               )}
 
-              {/* Toggle bối cảnh / lore */}
               <div className="flex gap-4 px-1">
                 <label className="flex items-center gap-2 text-[11px] text-gray-300 cursor-pointer">
                   <input type="checkbox" checked={importContext} onChange={e => setImportContext(e.target.checked)} className="accent-amber-600" />
@@ -957,7 +982,6 @@ export default function FanficAnalyzer({ state, updateState, onClose }: FanficAn
                 </label>
               </div>
 
-              {/* Giọng kể & ngôi kể gốc — chỉ hiện khi importContext bật vì sẽ được lưu cùng lúc */}
               {importContext && result.narrativeVoice && (
                 <div className="bg-violet-950/20 border border-violet-800/30 rounded-xl p-3">
                   <p className="text-xs font-bold text-violet-300 mb-1">🎙️ Ngôi kể & giọng kể gốc (tự động phát hiện)</p>
