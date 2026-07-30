@@ -83,16 +83,6 @@ export const handler: Handler = async (event) => {
       ];
       const DEFAULT_MODELS = isCatieCliEndpoint ? CATIECLI_MODELS : AG_MODELS;
 
-      // ⚠️ GIỚI HẠN MODEL ĐỂ TRÁNH TIMEOUT TRÊN NETLIFY
-      let modelPool: string[];
-      if (customModel?.trim()) {
-        modelPool = [customModel.trim()];
-      } else {
-        // CHỈ LẤY 2 MODEL ĐẦU (thay vì shuffle toàn bộ)
-        const shuffled = [...DEFAULT_MODELS].sort(() => Math.random() - 0.5);
-        modelPool = shuffled.slice(0, 2); // Giới hạn 2 model để tránh timeout
-      }
-
       const messages: { role: string; content: string }[] = [];
       if (fullInstruction) {
         messages.push({ role: "system", content: fullInstruction });
@@ -102,47 +92,37 @@ export const handler: Handler = async (event) => {
         : String(prompt);
       messages.push({ role: "user", content: userContent });
 
-      let lastError = "";
-      for (const model of modelPool) {
-        try {
-          const response = await fetch(endpoint, {
-            method: "POST",
-            headers: {
-              "Content-Type": "application/json",
-              Authorization: `Bearer ${apiKey}`,
-            },
-            body: JSON.stringify({
-              model,
-              messages,
-              max_tokens: 8192,
-              temperature: 0.9,
-              stream: false,
-            }),
-          });
+      // 👈 SỬA: Chỉ thử 1 model duy nhất, không vòng lặp
+      const model = customModel?.trim() || DEFAULT_MODELS[0];
 
-          if (response.ok) {
-            const data = await response.json();
-            const text = data?.choices?.[0]?.message?.content || data?.choices?.[0]?.text || "";
-            if (text) {
-              return { statusCode: 200, body: JSON.stringify({ text, model_used: model }) };
-            }
-          }
+      const response = await fetch(endpoint, {
+        method: "POST",
+        headers: {
+          "Content-Type": "application/json",
+          Authorization: `Bearer ${apiKey}`,
+        },
+        body: JSON.stringify({
+          model,
+          messages,
+          max_tokens: 8192,
+          temperature: 0.9,
+          stream: false,
+        }),
+      });
 
-          const errText = await response.text().catch(() => "");
-          lastError = `Model ${model}: HTTP ${response.status}`;
-
-          if (response.status !== 429 && response.status !== 503 && response.status >= 400 && response.status < 500) {
-            break;
-          }
-        } catch (fetchErr: any) {
-          lastError = fetchErr.message;
+      if (response.ok) {
+        const data = await response.json();
+        const text = data?.choices?.[0]?.message?.content || data?.choices?.[0]?.text || "";
+        if (text) {
+          return { statusCode: 200, body: JSON.stringify({ text, model_used: model }) };
         }
       }
 
+      const errText = await response.text().catch(() => "");
       return {
-        statusCode: 429,
+        statusCode: response.status,
         body: JSON.stringify({
-          error: `Tất cả model đều hết quota hoặc lỗi. Lỗi cuối: ${lastError}. Hãy kiểm tra lại quota tại nhà cung cấp tương ứng.`,
+          error: `Model ${model}: HTTP ${response.status}. ${errText.substring(0, 200)}`,
         }),
       };
     }

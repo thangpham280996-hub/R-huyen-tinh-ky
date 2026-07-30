@@ -92,7 +92,16 @@ async function callAI(prompt: string, systemInstruction: string, apiKeys: any[])
     headers: { 'Content-Type': 'application/json' },
     body: JSON.stringify(body),
   });
-  const data = await res.json();
+    const rawText = await res.text();
+  let data: any;
+  try {
+    data = JSON.parse(rawText);
+  } catch {
+    throw new Error(
+      `SERVER_NON_JSON::Máy chủ trả về dữ liệu không hợp lệ (có thể do timeout). HTTP ${res.status}. Nội dung: ${rawText.substring(0, 150)}`
+    );
+  }
+
   if (!res.ok) throw new Error(data.error || `HTTP ${res.status}`);
   return (data.text || '').trim();
 }
@@ -235,13 +244,49 @@ function preMergeChunks(chunkResults: string[]) {
   return summarizedText;
 }
 
-async function synthesizeResults(chunkResults: string[], workTitle: string, apiKeys: any[], updateState: any): Promise<AnalysisResult> {
-  const summarizedText = preMergeChunks(chunkResults);
+async function synthesizeResults(
+  chunkResults: string[],
+  workTitle: string,
+  apiKeys: any[],
+  updateState: any,
+  onProgress?: (msg: string) => void
+): Promise<AnalysisResult> {
+  const BATCH_SIZE = 25; // Số đoạn thô gộp mỗi lần gọi AI trung gian — chỉnh nếu vẫn timeout thì giảm xuống 15
+
+  // ── Bước 1: Tổng hợp từng nhóm nhỏ thành summary ngắn (gọi AI nhiều lần nhỏ) ──
+  const batchSummaries: string[] = [];
+  for (let i = 0; i < chunkResults.length; i += BATCH_SIZE) {
+    const batch = chunkResults.slice(i, i + BATCH_SIZE);
+    const batchText = preMergeChunks(batch); // vẫn dùng hàm gộp local có sẵn, không đổi
+
+    if (onProgress) {
+      onProgress(`Tổng hợp nhóm ${Math.floor(i / BATCH_SIZE) + 1}/${Math.ceil(chunkResults.length / BATCH_SIZE)}...`);
+    }
+
+    const systemBatch = `Bạn là AI tóm tắt dữ liệu tiểu thuyết. Nhận dữ liệu thô đã gộp nhóm từ một phần truyện.
+Nhiệm vụ: rút gọn còn các nhân vật/thế lực/sự kiện QUAN TRỌNG NHẤT, loại trùng lặp trong nhóm này.
+Trả về JSON CÙNG FORMAT với dữ liệu đầu vào (characters, worldEntities, plotPoints, lore, genres, pov, narratorVoice). CHỈ TRẢ JSON THUẦN.`;
+
+    const raw = await callAIWithRetry(batchText, systemBatch, apiKeys, updateState);
+    batchSummaries.push(raw.replace(/```json\n?/g, '').replace(/```\n?/g, '').trim());
+
+    // Tránh gọi dồn dập giữa các nhóm
+    if (i + BATCH_SIZE < chunkResults.length) {
+      await new Promise(r => setTimeout(r, 2000));
+    }
+  }
+
+  // ── Bước 2: Gộp các summary (đã ngắn hơn rất nhiều) rồi gọi AI lần cuối ──
+  const finalText = preMergeChunks(batchSummaries);
+  
   const system = `Bạn là AI tổng hợp phân tích tiểu thuyết. Nhận dữ liệu ĐÃ ĐƯỢC GỘP NHÓM từ nhiều chương.
 Nhiệm vụ: Chắt lọc, loại bỏ trùng lặp triệt để và viết lại thành 1 hồ sơ JSON hoàn chỉnh, logic nhất.
 Trả về JSON với format:
 {
-  "title": "tên tác phẩm", "genres": ["thể loại"], "context": "bối cảnh cốt truyện", "writingStyle": "văn phong",
+  "title": "tên tác phẩm", 
+  "genres": ["thể loại"], 
+  "context": "bối cảnh cốt truyện", 
+  "writingStyle": "văn phong",
   "narrativeVoice": "Tổng hợp NGÔI KỂ chính của toàn truyện (ngôi 1/ngôi 3 giới hạn/ngôi 3 toàn tri) + giọng điệu người kể (hài hước/u uất/lạnh lùng...) + nhịp câu (ngắn gấp/dài trữ tình) + các tật ngôn ngữ hoặc mô-típ miêu tả lặp lại đặc trưng. Viết thành 1 đoạn mô tả rõ ràng, đủ chi tiết để một AI khác có thể bắt chước giọng văn này.",
   "characters": [{"name":"...","gender":"Nam/Nữ","age":"...","role":"...","appearance":"...","personality":"...","backStory":"...","currentStatus":"...","additionalInfo":"..."}],
   "worldEntities": [{"name":"...","type":"sect/family/place/power/system/other","description":"..."}],
@@ -249,7 +294,7 @@ Trả về JSON với format:
 }
 CHỈ TRẢ JSON THUẦN.`;
 
-  const userPrompt = `Tên tác phẩm: "${workTitle}"\n\nDữ liệu thô đã nhóm:\n${summarizedText}`;
+  const userPrompt = `Tên tác phẩm: "${workTitle}"\n\nDữ liệu thô đã nhóm:\n${finalText}`;
   const raw = await callAIWithRetry(userPrompt, system, apiKeys, updateState);
   const clean = raw.replace(/```json\n?/g, '').replace(/```\n?/g, '').trim();
   const match = clean.match(/\{[\s\S]*\}/);
@@ -477,27 +522,35 @@ export default function FanficAnalyzer({ state, updateState, onClose }: FanficAn
       }
 
       setProgress({ current: total - 1, total, label: 'Đang gộp và xử lý trùng lặp nhân vật/thế lực...' });
-      analysisResult = await synthesizeResults(results, workName, state.apiKeys, updateState);
-      setProgress({ current: total, total, label: 'Hoàn tất!' });
-
-      setResult(analysisResult);
-      setSelectedChars(new Set(analysisResult.characters?.map((_, i) => i) || []));
-      setSelectedWorlds(new Set(analysisResult.worldEntities?.map((_, i) => i) || []));
-      setStep('preview');
-
-    } catch (err: any) {
-      const msg = err?.message || 'Lỗi không xác định';
-      if (msg.startsWith('ALL_KEYS_COOLDOWN::')) {
-        // Không phải lỗi thật — đây là app CHỦ ĐỘNG dừng để tránh rớt về key mặc định dùng chung
-        setStoppedManually(true);
-        setError(`${msg.replace('ALL_KEYS_COOLDOWN::', '')} Đã lưu an toàn ${chunkResults.length} đoạn.`);
-      } else {
-        setStoppedManually(false);
-        setError(`Lỗi: ${msg}. Đã lưu an toàn ${chunkResults.length} đoạn. Vui lòng bấm Tải Tiến Trình hoặc thử Tiếp Tục.`);
+      analysisResult = await synthesizeResults(
+      results,
+      workName,
+      state.apiKeys,
+      updateState,
+      (msg: string) => {
+        setProgress(prev => ({ ...prev, label: msg }));
       }
-      setStep('confirm');
+    );
+
+    setProgress({ current: total, total, label: 'Hoàn tất!' });
+
+    setResult(analysisResult);
+    setSelectedChars(new Set(analysisResult.characters?.map((_, i) => i) || []));
+    setSelectedWorlds(new Set(analysisResult.worldEntities?.map((_, i) => i) || []));
+    setStep('preview');
+
+  } catch (err: any) {
+    const msg = err?.message || 'Lỗi không xác định';
+    if (msg.startsWith('ALL_KEYS_COOLDOWN::')) {
+      setStoppedManually(true);
+      setError(`${msg.replace('ALL_KEYS_COOLDOWN::', '')} Đã lưu an toàn ${chunkResults.length} đoạn.`);
+    } else {
+      setStoppedManually(false);
+      setError(`Lỗi: ${msg}. Đã lưu an toàn ${chunkResults.length} đoạn. Vui lòng bấm Tải Tiến Trình hoặc thử Tiếp Tục.`);
     }
-  };
+    setStep('confirm');
+  }
+};
 
   // ── NHẬP KẾT QUẢ ĐÃ PHÂN TÍCH VÀO DỰ ÁN (đã sửa — trước đây là hàm rỗng) ──
   const handleImport = () => {
