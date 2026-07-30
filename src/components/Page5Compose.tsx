@@ -6,6 +6,7 @@ import {
 } from 'lucide-react';
 import { buildHardRulesPrompt } from './Page4Rules';
 import { NovelState, Chapter } from '../types';
+import { callApi } from '../utils/api';
 
 interface Page5ComposeProps {
   state: NovelState;
@@ -513,13 +514,7 @@ ${recentHistory}
         }
       }
 
-      const res = await fetch('/api/generate', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify(body),
-      });
-      const data = await res.json();
-      if (!res.ok) throw new Error(data.error || `HTTP ${res.status}`);
+      const data = await callApi('generate', body);
 
       const aiMsg: ChatMessage = {
         id: Math.random().toString(36).substr(2, 9),
@@ -604,9 +599,7 @@ ${recentHistory}
         }
       }
 
-      const res  = await fetch('/api/generate', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(body) });
-      const data = await res.json();
-      if (!res.ok) throw new Error(data.error || `HTTP ${res.status}`);
+      const data = await callApi('generate', body);
 
       const textGenerated = (data.text || '').trim();
       if (!textGenerated) throw new Error('AI trả về nội dung trống rỗng.');

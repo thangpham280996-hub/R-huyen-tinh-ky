@@ -7,6 +7,7 @@ import {
 } from 'lucide-react';
 import { NovelState, ApiKeyConfig } from '../types';
 import FanficAnalyzer from './FanficAnalyzer';
+import { callApi } from '../utils/api'; // 👈 THÊM IMPORT
 
 interface Page1StartProps {
   state: NovelState;
@@ -44,10 +45,9 @@ const CATIECLI_MODELS = [
   { value: 'gemini-3.1-pro-preview', label: 'Gemini 3.1 Pro Preview' },
 ];
 
-// ── Nhà cung cấp nào có endpoint /models để "Lấy models" hoạt động ──
-// (openai/claude/grok "chính chủ" cũng theo chuẩn OpenAI-compatible nên vẫn cho thử)
 const MODEL_LISTABLE_PROVIDERS: ProviderValue[] = ['antigravity', 'catiecli', 'openai', 'claude', 'grok'];
 
+// 👈 SỬA HÀM testConnection
 async function testConnection(key: ApiKeyConfig): Promise<{ ok: boolean; msg: string }> {
   try {
     const body: Record<string, any> = {
@@ -62,13 +62,9 @@ async function testConnection(key: ApiKeyConfig): Promise<{ ok: boolean; msg: st
     } else if (key.provider !== 'gemini') {
       body.customEndpoint = 'https://ag.beijixingxing.com/v1/chat/completions';
     }
-    const res = await fetch('/api/generate', {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify(body),
-    });
-    const data = await res.json();
-    if (!res.ok) return { ok: false, msg: data.error || `HTTP ${res.status}` };
+    
+    // 👈 SỬA: Dùng callApi thay vì fetch trực tiếp
+    const data = await callApi('generate', body);
     const text = (data.text || '').trim();
     return { ok: true, msg: `✓ OK${text ? ` · "${text.substring(0, 30)}"` : ''}` };
   } catch (err: any) {
@@ -76,22 +72,23 @@ async function testConnection(key: ApiKeyConfig): Promise<{ ok: boolean; msg: st
   }
 }
 
-// ── MỚI: Gọi backend để lấy danh sách model thật từ endpoint OpenAI-compatible ──
+// 👈 SỬA HÀM fetchModelsList
 async function fetchModelsList(apiKey: string, provider: ProviderValue): Promise<string[]> {
-  const res = await fetch('/api/list-models', {
-    method: 'POST',
-    headers: { 'Content-Type': 'application/json' },
-    body: JSON.stringify({ customApiKey: apiKey, provider }),
-  });
-  const data = await res.json();
-  if (!res.ok) throw new Error(data.error || `HTTP ${res.status}`);
-  if (!Array.isArray(data.models) || data.models.length === 0) {
-    throw new Error('Không có model nào trả về từ endpoint.');
+  try {
+    const data = await callApi('list-models', {
+      customApiKey: apiKey,
+      provider: provider,
+    });
+    
+    if (!Array.isArray(data.models) || data.models.length === 0) {
+      throw new Error('Không có model nào trả về từ endpoint.');
+    }
+    return data.models;
+  } catch (err: any) {
+    throw new Error(err.message || 'Lỗi lấy danh sách model.');
   }
-  return data.models;
 }
 
-// ─── Helper format dung lượng ─────────────────────────────────────────────────
 function formatBytes(bytes: number): string {
   if (bytes < 1024) return `${bytes} B`;
   if (bytes < 1024 * 1024) return `${(bytes / 1024).toFixed(1)} KB`;
@@ -108,7 +105,6 @@ export default function Page1Start({ state, updateState, onNavigate, onEnterNewW
   const [showAnalyzer, setShowAnalyzer] = useState(false);
   const [testStatus, setTestStatus]   = useState<Record<string, { loading: boolean; ok?: boolean; msg?: string }>>({});
 
-  // ── MỚI: state cho tính năng "Lấy models" ──
   const [modelsLoading, setModelsLoading] = useState(false);
   const [fetchedModels, setFetchedModels] = useState<string[]>([]);
   const [modelsError, setModelsError]     = useState<string | null>(null);
@@ -119,7 +115,6 @@ export default function Page1Start({ state, updateState, onNavigate, onEnterNewW
     (acc, c) => acc + (c.content?.split(/\s+/).filter(Boolean).length || 0), 0
   );
 
-  // ── Tính dung lượng JSON ước tính + thông tin ảnh ──
   const storageInfo = useMemo(() => {
     const jsonStr = JSON.stringify(state);
     const totalBytes = new Blob([jsonStr]).size;
@@ -130,9 +125,8 @@ export default function Page1Start({ state, updateState, onNavigate, onEnterNewW
     return { totalBytes, totalImages, imagesWithDesc };
   }, [state]);
 
-  const isLarge = storageInfo.totalBytes > 5 * 1024 * 1024; // > 5MB
+  const isLarge = storageInfo.totalBytes > 5 * 1024 * 1024;
 
-  // ── Nhập dự án từ JSON — có kiểm tra định dạng để tránh nhầm file (mới) ──
   const handleJsonUpload = (e: React.ChangeEvent<HTMLInputElement>) => {
     const file = e.target.files?.[0];
     if (!file) return;
@@ -141,7 +135,6 @@ export default function Page1Start({ state, updateState, onNavigate, onEnterNewW
       try {
         const parsed = JSON.parse(event.target?.result as string);
 
-        // ── Validate: đây có phải JSON dự án hợp lệ không? ──
         const isValidProject =
           parsed && typeof parsed === 'object' &&
           parsed.config && typeof parsed.config === 'object' &&
@@ -149,7 +142,6 @@ export default function Page1Start({ state, updateState, onNavigate, onEnterNewW
           Array.isArray(parsed.characters);
 
         if (!isValidProject) {
-          // Phát hiện nhầm file checkpoint của Đồng nhân (chunkResults)
           if (Array.isArray(parsed?.chunkResults)) {
             alert(
               'File này là "Tiến trình phân tích Đồng nhân" (chunkResults), không phải file dự án.\n\n' +
@@ -158,14 +150,14 @@ export default function Page1Start({ state, updateState, onNavigate, onEnterNewW
           } else {
             alert('File JSON không đúng định dạng dự án (thiếu config/chapters/characters).');
           }
-          return; // KHÔNG chuyển trang khi file không hợp lệ
+          return;
         }
 
         updateState((prev) => {
           prev.config        = parsed.config;
           prev.characters    = (parsed.characters || []).map((c: any) => ({
             ...c,
-            images: c.images || [], // backward compat — data cũ chưa có field images
+            images: c.images || [],
           }));
           prev.worldEntities = parsed.worldEntities || [];
           prev.rules         = parsed.rules         || prev.rules;
@@ -219,7 +211,6 @@ export default function Page1Start({ state, updateState, onNavigate, onEnterNewW
     updateState((prev) => { prev.apiKeys.push(keyObj); });
     setNewKey(''); setNewLabel(''); setIsAddingKey(false);
     setKeysExpanded(true);
-    // reset trạng thái "Lấy models" cho lần thêm key tiếp theo
     setFetchedModels([]); setModelsError(null); setModelSearch('');
   };
 
@@ -254,13 +245,11 @@ export default function Page1Start({ state, updateState, onNavigate, onEnterNewW
     if (value === 'antigravity') setNewModel('gemini-2.5-flash');
     else if (value === 'catiecli') setNewModel('gemini-3-flash-preview');
     else setNewModel('');
-    // Đổi nhà cung cấp → danh sách model đã lấy trước đó không còn phù hợp, xoá đi
     setFetchedModels([]);
     setModelsError(null);
     setModelSearch('');
   };
 
-  // ── MỚI: bấm "Lấy models" — cần đã nhập API Key trước ──
   const handleFetchModels = async () => {
     if (!newKey.trim()) {
       setModelsError('Nhập API Key trước khi lấy danh sách model.');
@@ -286,7 +275,6 @@ export default function Page1Start({ state, updateState, onNavigate, onEnterNewW
   return (
     <div className="max-w-4xl mx-auto py-3 px-4 space-y-3">
 
-      {/* ── Hero siêu gọn ── */}
       <div className="text-center">
         <div className="inline-flex items-center gap-2 mb-1">
           <div className="p-1.5 bg-red-950/40 border border-red-500/30 rounded-lg">
@@ -301,7 +289,6 @@ export default function Page1Start({ state, updateState, onNavigate, onEnterNewW
         </p>
       </div>
 
-      {/* ── Cảnh báo lưu trữ tạm thời — QUAN TRỌNG ── */}
       <div className="p-3 bg-amber-950/20 border border-amber-800/40 rounded-xl text-[11px] text-amber-300 leading-relaxed flex items-start gap-2">
         <AlertCircle className="w-4 h-4 shrink-0 mt-0.5" />
         <div>
@@ -311,7 +298,6 @@ export default function Page1Start({ state, updateState, onNavigate, onEnterNewW
         </div>
       </div>
 
-      {/* ── Card tiếp tục tác phẩm ── */}
       {hasProject && (
         <button
           onClick={() => onNavigate('compose')}
@@ -336,7 +322,6 @@ export default function Page1Start({ state, updateState, onNavigate, onEnterNewW
         </button>
       )}
 
-      {/* ── Grid 4 action cards 2x2 - compact ── */}
       <div className="grid grid-cols-2 gap-2.5">
         <button
           onClick={onEnterNewWorld}
@@ -402,7 +387,6 @@ export default function Page1Start({ state, updateState, onNavigate, onEnterNewW
         </div>
       </div>
 
-      {/* ── Dung lượng dữ liệu hiện tại ── */}
       {(state.characters.length > 0 || state.chapters.length > 0) && (
         <div className={`rounded-xl border p-3 flex items-center justify-between gap-3 ${
           isLarge ? 'bg-amber-950/20 border-amber-800/40' : 'bg-neutral-900/60 border-neutral-800'
@@ -429,7 +413,6 @@ export default function Page1Start({ state, updateState, onNavigate, onEnterNewW
         </div>
       )}
 
-      {/* ── API Key Manager - collapsible ── */}
       <div className="bg-neutral-900/80 border border-neutral-800 rounded-xl overflow-hidden">
         <button
           onClick={() => setKeysExpanded(!keysExpanded)}
@@ -485,7 +468,6 @@ export default function Page1Start({ state, updateState, onNavigate, onEnterNewW
                   </div>
                 </div>
 
-                {/* ── Khóa API — chuyển lên TRƯỚC ô Model vì "Lấy models" cần key đã nhập ── */}
                 <div>
                   <label className="block text-[10px] text-gray-400 mb-1">Khóa API</label>
                   <input
@@ -532,12 +514,10 @@ export default function Page1Start({ state, updateState, onNavigate, onEnterNewW
                       {fetchedModels.map((m) => <option key={m} value={m} />)}
                     </datalist>
 
-                    {/* Lỗi lấy models */}
                     {modelsError && (
                       <p className="mt-1 text-[9px] text-red-400 leading-relaxed">⚠ {modelsError}</p>
                     )}
 
-                    {/* ── MỚI: Kết quả "Lấy models" — danh sách thật từ endpoint, có ô tìm nhanh ── */}
                     {fetchedModels.length > 0 && (
                       <div className="mt-1.5 p-2 bg-neutral-900/60 border border-cyan-900/30 rounded-lg space-y-1.5">
                         <div className="flex items-center justify-between">
@@ -576,7 +556,6 @@ export default function Page1Start({ state, updateState, onNavigate, onEnterNewW
                       </div>
                     )}
 
-                    {/* Gợi ý nhanh cứng — chỉ hiện khi CHƯA lấy được danh sách thật, tránh trùng lặp thông tin */}
                     {fetchedModels.length === 0 && (newProvider === 'antigravity' || newProvider === 'catiecli') && (
                       <div className="mt-1.5 flex flex-wrap gap-1">
                         {(newProvider === 'antigravity' ? AG_MODELS : CATIECLI_MODELS).map((m) => (

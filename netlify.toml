@@ -1,6 +1,23 @@
 [build]
   command = "npm run build"
   publish = "dist"
+  functions = "netlify/functions"
+
+[functions]
+  node_bundler = "esbuild"
+
+# QUAN TRỌNG: 2 rule /api/* phải đứng TRƯỚC rule catch-all "/*" bên dưới
+[[redirects]]
+  from = "/api/generate"
+  to = "/.netlify/functions/generate"
+  status = 200
+  force = true
+
+[[redirects]]
+  from = "/api/list-models"
+  to = "/.netlify/functions/list-models"
+  status = 200
+  force = true
 
 [[redirects]]
   from = "/*"
