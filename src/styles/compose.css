@@ -1,0 +1,114 @@
+/* src/styles/compose.css */
+
+/* ─── Khung soạn thảo chính ──────────────────────────────────────────────── */
+.compose-workspace {
+  display: flex;
+  flex-direction: column;
+  min-height: calc(100vh - 140px);
+  background: #0d0d0d;
+}
+
+.compose-editor {
+  flex: 1;
+  padding: 1.5rem;
+  display: flex;
+  flex-direction: column;
+  gap: 1rem;
+  min-height: 500px;
+}
+
+.compose-editor textarea {
+  flex: 1;
+  min-height: 400px;
+  padding: 1.5rem;
+  font-size: 16px;
+  line-height: 1.9;
+  font-family: 'Georgia', 'Times New Roman', serif;
+  color: #e5e7eb;
+  background: #0a0a0a;
+  border: 1px solid #1a1a1a;
+  border-radius: 1rem;
+  resize: none;
+  outline: none;
+  transition: border-color 0.2s;
+}
+
+.compose-editor textarea:focus {
+  border-color: #7f1d1d;
+}
+
+.compose-editor textarea::placeholder {
+  color: #4a4a4a;
+}
+
+/* ─── Scrollbar ────────────────────────────────────────────────────────────── */
+.compose-editor textarea::-webkit-scrollbar {
+  width: 8px;
+}
+
+.compose-editor textarea::-webkit-scrollbar-track {
+  background: #1a1a1a;
+  border-radius: 4px;
+}
+
+.compose-editor textarea::-webkit-scrollbar-thumb {
+  background: #3a3a3a;
+  border-radius: 4px;
+}
+
+.compose-editor textarea::-webkit-scrollbar-thumb:hover {
+  background: #5a5a5a;
+}
+
+/* ─── Sidebar ──────────────────────────────────────────────────────────────── */
+.compose-sidebar {
+  width: 180px;
+  min-width: 140px;
+  background: #0d0d0d;
+  border-right: 1px solid #1a1a1a;
+  display: flex;
+  flex-direction: column;
+}
+
+.compose-sidebar .chapter-item {
+  padding: 0.5rem 0.75rem;
+  border-radius: 0.5rem;
+  cursor: pointer;
+  transition: all 0.15s;
+  font-size: 0.75rem;
+}
+
+.compose-sidebar .chapter-item:hover {
+  background: #1a1a1a;
+}
+
+.compose-sidebar .chapter-item.active {
+  background: #1a0a0a;
+  border: 1px solid #3a1a1a;
+  color: #ef4444;
+}
+
+/* ─── Responsive ───────────────────────────────────────────────────────────── */
+@media (max-width: 768px) {
+  .compose-sidebar {
+    width: 100%;
+    min-width: unset;
+    border-right: none;
+    border-bottom: 1px solid #1a1a1a;
+    max-height: 200px;
+  }
+  
+  .compose-editor textarea {
+    font-size: 14px;
+    padding: 1rem;
+    min-height: 300px;
+  }
+}
+
+@media (max-width: 480px) {
+  .compose-editor textarea {
+    font-size: 13px;
+    padding: 0.75rem;
+    min-height: 250px;
+  }
+}

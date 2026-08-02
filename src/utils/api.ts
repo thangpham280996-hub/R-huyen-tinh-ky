@@ -32,5 +32,10 @@ export async function callApi(endpoint: string, data: any) {
     throw new Error(parsed?.error || `API "${endpoint}" lỗi HTTP ${response.status}`);
   }
 
+  // 👈 THÊM: chuẩn hóa Unicode cho field text nếu có
+  if (parsed && typeof parsed.text === 'string') {
+    parsed.text = parsed.text.normalize('NFC');
+  }
+
   return parsed;
 }

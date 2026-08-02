@@ -1,5 +1,5 @@
 import React, { useState } from 'react';
-import { ShieldCheck, Scale, AlertOctagon, RefreshCw, BookmarkCheck, Lock, ChevronDown, ChevronUp, Info, Library, Plus, Trash2, Edit2, Check, X } from 'lucide-react';
+import { ShieldCheck, Scale, AlertOctagon, RefreshCw, BookmarkCheck, Lock, ChevronDown, ChevronUp, Info, Library, Plus, Trash2, Edit2, Check, X, Sparkles } from 'lucide-react';
 import { NovelState, HardRules, LoreEntry } from '../types';
 
 interface Page4RulesProps {
@@ -20,20 +20,23 @@ export const DEFAULT_HARD_RULES: HardRules = {
   noMetaComments:         true,
   noOOCPersonality:       true,
   noModernSlangInAncient: true,
-  noAncientToneInModern:  false, // tắt mặc định vì không phải lúc nào cũng cần
+  noAncientToneInModern:  false,
   noAbruptResolution:     true,
   noSummaryMode:          true,
   noExcessiveEllipsis:    true,
+  noFutureCharacters:     true, // 👈 MỚI
+  noSelfAddPlot:          true, // 👈 MỚI
+  noDangerousTone:        true, // 👈 MỚI
 };
 
-// ─── Định nghĩa từng rule: label, mô tả, nhóm, prompt thực tế đưa vào AI ────
+// ─── Định nghĩa từng rule ───────────────────────────────────────────────────
 interface RuleDef {
   key: keyof HardRules;
   label: string;
-  desc: string;        // giải thích ngắn cho tác giả
+  desc: string;
   group: string;
   severity: 'high' | 'medium';
-  aiPrompt: string;    // câu lệnh thực tế đẩy vào prompt AI
+  aiPrompt: string;
 }
 
 const RULE_DEFS: RuleDef[] = [
@@ -70,6 +73,15 @@ const RULE_DEFS: RuleDef[] = [
     desc: 'AI rút gọn cảnh quan trọng thành 2-3 câu tóm tắt thay vì diễn giải chi tiết.',
     aiPrompt: 'KHÔNG tóm tắt cảnh quan trọng bằng vài câu gọn. Mọi cảnh phải được viết đầy đủ: đối thoại, hành động, nội tâm, không gian — chi tiết và sống động.',
   },
+  // ── MỚI: Rule cấm tự thêm tình tiết ──
+  {
+    key: 'noSelfAddPlot',
+    group: 'Cấu trúc cảnh',
+    severity: 'high',
+    label: 'Cấm tự thêm tình tiết mới',
+    desc: 'AI tự sáng tạo thêm biến cố, twist, hoặc tình huống ngoài mệnh lệnh tác giả.',
+    aiPrompt: '🚨 CHỈ viết đúng những gì mệnh lệnh tác giả yêu cầu. KHÔNG tự thêm biến cố mới, twist bất ngờ, tình tiết phụ, hay bất kỳ yếu tố nào không được đề cập trong mệnh lệnh. Sáng tạo trong phạm vi mệnh lệnh, không mở rộng cốt truyện tự ý.',
+  },
 
   // ── Nhóm: Nhân vật ──
   {
@@ -95,6 +107,15 @@ const RULE_DEFS: RuleDef[] = [
     label: 'Cấm nhắc nhân vật / sự việc không đề cập',
     desc: 'AI kéo nhân vật chương trước vào cảnh hiện tại dù không liên quan, gây loãng tiêu điểm.',
     aiPrompt: 'KHÔNG tự ý nhắc đến nhân vật, sự việc, địa điểm không được đề cập trong mệnh lệnh hiện tại. Nếu mệnh lệnh chỉ nói về 2 nhân vật, không kéo thêm nhân vật khác vào dù họ đã xuất hiện ở chương trước.',
+  },
+  // ── MỚI: Rule cấm nhắc nhân vật chưa xuất hiện ──
+  {
+    key: 'noFutureCharacters',
+    group: 'Nhân vật',
+    severity: 'high',
+    label: 'Cấm nhắc nhân vật chưa xuất hiện',
+    desc: 'AI tự nhắc đến nhân vật chưa xuất hiện trong mạch truyện hiện tại, gây lộn xộn timeline.',
+    aiPrompt: '🚨 TUYỆT ĐỐI KHÔNG nhắc đến, ám chỉ, hoặc đề cập đến bất kỳ nhân vật nào CHƯA XUẤT HIỆN trong câu chuyện tính đến thời điểm hiện tại. Nếu một nhân vật chưa được giới thiệu trong chương này hoặc các chương trước, KHÔNG được nhắc đến tên, vai trò, hay bất kỳ thông tin gì về họ. Viết như thể nhân vật đó chưa từng tồn tại. KHÔNG dùng các cụm từ như "như đã quen với X", "cũng như lần gặp Y", "nhớ lại hồi Z" — vì X, Y, Z chưa xuất hiện.',
   },
 
   // ── Nhóm: Nội dung & văn phong ──
@@ -138,6 +159,15 @@ const RULE_DEFS: RuleDef[] = [
     desc: 'AI hay thêm "[Tiếp theo]", "Được rồi, tôi sẽ viết...", "Lưu ý:", hoặc dùng **bold**, # header.',
     aiPrompt: 'CHỈ TRẢ VĂN XUÔI THUẦN TÚY. TUYỆT ĐỐI KHÔNG: markdown (**, #, -, *), lời dẫn ("Được rồi...", "Đây là đoạn..."), chú thích meta ("[Hết đoạn]", "[Tiếp theo]", "Lưu ý:"), hay bất kỳ văn bản nào ngoài nội dung truyện. Bắt đầu ngay vào văn xuôi.',
   },
+  // ── MỚI: Rule cấm câu từ đe dọa ──
+  {
+    key: 'noDangerousTone',
+    group: 'Nội dung & văn phong',
+    severity: 'medium',
+    label: 'Cấm câu từ đe dọa, xáo rỗng',
+    desc: 'AI dùng câu từ mang cảm giác nguy hiểm, đe dọa bất thường, tạo không khí tiêu cực không cần thiết.',
+    aiPrompt: '🚨 KHÔNG sử dụng câu từ mang cảm giác nguy hiểm, đe dọa, hoặc xáo rỗng không cần thiết. Giữ giọng văn ổn định, không gây hoang mang cho người đọc. KHÔNG viết theo hướng đe dọa, gây cấn bất thường, hoặc tạo bầu không khí tiêu cực ngoài dự kiến.',
+  },
 
   // ── Nhóm: Xưng hô & nhất quán ──
   {
@@ -166,7 +196,7 @@ const GROUP_COLORS: Record<string, string> = {
   'Xưng hô & nhất quán':  'text-emerald-400 border-emerald-800/40 bg-emerald-950/20',
 };
 
-// ─── Xuất buildHardRulesPrompt để Page5Compose import ────────────────────────
+// ─── Xuất buildHardRulesPrompt ────────────────────────────────────────────────
 export function buildHardRulesPrompt(hardRules: HardRules): string {
   const active = RULE_DEFS.filter(r => hardRules[r.key]);
   if (active.length === 0) return '';
@@ -179,7 +209,6 @@ function RuleToggle({
   value,
   onChange,
 }: {
-  key?: any;
   def: RuleDef;
   value: boolean;
   onChange: (v: boolean) => void;
@@ -194,7 +223,6 @@ function RuleToggle({
     }`}>
       <div className="flex items-center justify-between gap-2">
         <div className="flex items-center gap-2 flex-1 min-w-0">
-          {/* Severity dot */}
           <span className={`w-1.5 h-1.5 rounded-full shrink-0 ${
             def.severity === 'high' ? 'bg-red-500' : 'bg-amber-500'
           }`} />
@@ -206,7 +234,6 @@ function RuleToggle({
             <Info className="w-3 h-3" />
           </button>
         </div>
-        {/* Toggle */}
         <button
           onClick={() => onChange(!value)}
           className={`relative w-9 h-5 rounded-full border transition-all shrink-0 ${
@@ -303,19 +330,16 @@ function LoreSection({
     setEditingId(null);
   };
 
-  // Nhóm entries theo category để hiển thị
   const grouped = loreEntries.reduce((acc, e) => {
     if (!acc[e.category]) acc[e.category] = [];
     acc[e.category].push(e);
     return acc;
   }, {} as Record<string, LoreEntry[]>);
 
-  // Tổng ký tự lore (để ước tính token)
   const totalChars = loreEntries.reduce((acc, e) => acc + e.content.length, 0);
 
   return (
     <div className="bg-neutral-900 border border-indigo-900/30 rounded-2xl overflow-hidden">
-      {/* Header */}
       <button
         onClick={() => setExpanded(!expanded)}
         className="w-full flex items-center justify-between px-5 py-4 hover:bg-neutral-800/40 transition-colors"
@@ -348,15 +372,12 @@ function LoreSection({
 
       {expanded && (
         <div className="px-5 pb-5 border-t border-neutral-800 pt-4 space-y-4">
-
-          {/* Giải thích */}
           <div className="p-3 bg-indigo-950/20 border border-indigo-900/30 rounded-xl text-[11px] text-indigo-200/70 leading-relaxed">
             💡 Trang 2 chỉ là ý tưởng thô ban đầu. Sau khi xây nhân vật ở Trang 3, hãy bổ sung thêm ở đây:
             hệ thống tu luyện chi tiết, bản đồ thế giới, các plot twist đã lên kế hoạch, thuật ngữ riêng của truyện...
             AI sẽ đọc toàn bộ khi viết để đảm bảo nhất quán.
           </div>
 
-          {/* Form thêm/sửa */}
           {isAdding && (
             <div className="bg-neutral-950 border border-indigo-800/40 rounded-xl p-4 space-y-3">
               <div className="flex items-center justify-between border-b border-neutral-800 pb-2.5">
@@ -399,7 +420,7 @@ function LoreSection({
                 </label>
                 <textarea
                   rows={5}
-                  placeholder={`Mô tả chi tiết về "${form.title || 'mục này'}"...\n\nVD với Hệ thống tu luyện:\n  Luyện Khí → Trúc Cơ → Kim Đan → Nguyên Anh → Hóa Thần → Luyện Hư → Hợp Thể → Đại Thừa → Độ Kiếp\n  Mỗi cảnh giới chia 9 tầng. Đột phá cần thiên tài linh thảo hoặc cơ duyên đặc biệt.`}
+                  placeholder={`Mô tả chi tiết về "${form.title || 'mục này'}"...`}
                   value={form.content}
                   onChange={(e) => setForm({ ...form, content: e.target.value })}
                   className="w-full bg-neutral-900 border border-neutral-700 rounded-xl p-3 text-xs text-gray-200 focus:outline-none focus:border-indigo-600 resize-y leading-relaxed"
@@ -422,7 +443,6 @@ function LoreSection({
             </div>
           )}
 
-          {/* Nút thêm mới */}
           {!isAdding && (
             <button
               onClick={() => { resetForm(); setIsAdding(true); }}
@@ -432,7 +452,6 @@ function LoreSection({
             </button>
           )}
 
-          {/* Danh sách entries */}
           {loreEntries.length === 0 && !isAdding && (
             <div className="py-8 text-center text-gray-600 text-xs border border-dashed border-neutral-800 rounded-xl">
               Chưa có mục nào. Thêm hệ thống tu luyện, bản đồ, thuật ngữ... để AI hiểu sâu hơn về thế giới truyện.
@@ -485,10 +504,9 @@ function LoreSection({
             </div>
           )}
 
-          {/* Token warning nếu quá nhiều */}
           {totalChars > 8000 && (
             <div className="px-3 py-2 bg-amber-950/30 border border-amber-800/40 rounded-xl text-[10px] text-amber-400 flex items-center gap-2">
-              ⚠️ Lore đang khá dài (~{Math.round(totalChars / 4)} tokens). Cân nhắc gộp các mục ngắn hoặc xoá thông tin không dùng để tránh vượt context window.
+              ⚠️ Lore đang khá dài (~{Math.round(totalChars / 4)} tokens). Cân nhắc gộp các mục ngắn hoặc xoá thông tin không dùng.
             </div>
           )}
         </div>
@@ -501,8 +519,10 @@ function LoreSection({
 export default function Page4Rules({ state, updateState, onNavigate }: Page4RulesProps) {
   const { rules } = state;
   const [hardExpanded, setHardExpanded] = useState(true);
+  const [guideAdded, setGuideAdded] = useState(
+    rules.mandatory?.includes('HƯỚNG DẪN THAM KHẢO') || false
+  );
 
-  // Đảm bảo hardRules luôn có giá trị (backward compat)
   const hardRules: HardRules = rules.hardRules ?? DEFAULT_HARD_RULES;
 
   const setHardRule = (key: keyof HardRules, value: boolean) => {
@@ -513,10 +533,83 @@ export default function Page4Rules({ state, updateState, onNavigate }: Page4Rule
   };
 
   const activeCount = Object.values(hardRules).filter(Boolean).length;
-  const totalCount  = RULE_DEFS.length;
+  const totalCount = RULE_DEFS.length;
 
-  // Nhóm rules
   const groups = Array.from(new Set(RULE_DEFS.map(r => r.group)));
+
+  // ─── MỚI: Thêm hướng dẫn tham khảo ──────────────────────────────────────
+  const addReferenceGuide = () => {
+    const guidelines = `📝 HƯỚNG DẪN THAM KHẢO - LINH HOẠT, KHÔNG RẬP KHUÔN:
+
+🏞️ MÔI TRƯỜNG & KHÔNG GIAN:
+- Miêu tả không gian, thời tiết, ánh sáng, âm thanh, mùi hương
+- Tạo bầu không khí phù hợp với cảnh (lãng mạn, căng thẳng, u tối, ấm cúng...)
+- Không cần miêu tả quá dài dòng, chỉ cần đủ để người đọc hình dung
+
+🧍 CƠ THỂ & CẢM XÚC:
+- Vóc dáng, làn da, khuôn mặt, đôi mắt, mái tóc
+- Cảm xúc: vui, buồn, tức, sợ, bối rối, phấn khích, xấu hổ...
+- Biểu cảm: nhíu mày, mỉm cười, đỏ mặt, ánh mắt lấp lánh, run rẩy...
+- Linh hoạt, không miêu tả cứng nhắc mọi lúc
+
+👘 Y PHỤC & PHỤ KIỆN:
+- Trang phục, nội y, trang sức, phụ kiện
+- Màu sắc, chất liệu, kiểu dáng khi có ý nghĩa đặc biệt
+- Không cần liệt kê chi tiết từng bộ phận trang phục
+
+💬 LỜI THOẠI:
+- Phù hợp ngữ cảnh: căng thẳng, vui vẻ, bi thương, gấp gáp...
+- Ngữ điệu: gấp gáp, nghẹn ngào, thì thầm, dứt khoát, mỉa mai...
+- Dùng câu ngắn khi cao trào, câu dài khi trữ tình
+
+🧠 NỘI TÂM:
+- Suy nghĩ, trăn trở, ký ức, mâu thuẫn nội tâm
+- Xen kẽ tự nhiên với hành động và đối thoại
+
+🎭 BIỂU LỘ CẢM XÚC:
+- Cam chịu: cắn môi, nắm tay, mắt nhìn xuống
+- Sa ngã: mất phương hướng, tuyệt vọng, buông xuôi
+- Chịu đựng: cố nén, lặng im, gồng mình
+- Chấp nhận: thở dài, gật đầu, mỉm cười miễn cưỡng
+- Hưng phấn: mắt sáng rực, nụ cười rạng rỡ
+- Kìm nén: siết chặt tay, cổ họng nghẹn lại
+
+🖐️ CỬ CHỈ & HÀNH ĐỘNG:
+- Cử chỉ, tư thế, động tác cơ thể
+- Phù hợp với tình huống và tính cách nhân vật
+- Tự nhiên, không cường điệu hóa
+
+💞 TƯƠNG TÁC & QUAN HỆ THÂN MẬT:
+- Diễn tả cảm xúc, ham muốn, rung động khi gần gũi
+- Khoảnh khắc chạm mắt, chạm tay, hơi thở gấp gáp
+- Ngôn ngữ cơ thể: đôi tay vuốt ve, ánh mắt giao nhau, hơi thở hòa quyện
+- Cảm giác ngại ngùng, bồi hồi, khao khát, say mê
+- Khoái cảm dâng trào, mê đắm, cuồng nhiệt
+- Sau đó: dịu dàng, ấm áp, thỏa mãn, hoặc tiếc nuối, cô đơn
+
+💡 LƯU Ý: Đây là HƯỚNG DẪN THAM KHẢO, không phải quy tắc cứng nhắc. AI có thể LINH HOẠT SÁNG TẠO để tránh rập khuôn, giữ văn phong tự nhiên, hấp dẫn và phù hợp với từng cảnh cụ thể.`;
+
+    updateState((prev) => {
+      prev.rules.mandatory = prev.rules.mandatory 
+        ? prev.rules.mandatory + '\n\n' + guidelines 
+        : guidelines;
+    });
+    setGuideAdded(true);
+  };
+
+  const removeGuide = () => {
+    if (confirm('Xóa hướng dẫn tham khảo?')) {
+      // Xóa phần hướng dẫn khỏi mandatory
+      const current = rules.mandatory || '';
+      const cleaned = current
+        .replace(/📝 HƯỚNG DẪN THAM KHẢO - LINH HOẠT, KHÔNG RẬP KHUÔN:[\s\S]*?(?=\n\n|$)/, '')
+        .trim();
+      updateState((prev) => {
+        prev.rules.mandatory = cleaned;
+      });
+      setGuideAdded(false);
+    }
+  };
 
   return (
     <div className="max-w-4xl mx-auto py-8 px-4" id="view-page4">
@@ -533,10 +626,58 @@ export default function Page4Rules({ state, updateState, onNavigate }: Page4Rule
       <div className="space-y-6">
 
         {/* ══════════════════════════════════════════════
-            🔒 RÀNG BUỘC CỨNG AI — Section mới
+            📝 HƯỚNG DẪN THAM KHẢO (MỚI)
+        ══════════════════════════════════════════════ */}
+        <div className="bg-gradient-to-br from-violet-950/20 via-neutral-900 to-neutral-900 border border-violet-700/30 rounded-2xl overflow-hidden">
+          <div className="px-5 py-4 border-b border-violet-900/30">
+            <div className="flex items-center justify-between">
+              <div className="flex items-center gap-2">
+                <Sparkles className="w-4 h-4 text-violet-400" />
+                <h3 className="text-sm font-bold text-violet-300">📝 Hướng Dẫn Tham Khảo</h3>
+                <span className="text-[10px] text-gray-500">(Linh hoạt, không rập khuôn)</span>
+              </div>
+              <div className="flex gap-2">
+                {!guideAdded ? (
+                  <button
+                    onClick={addReferenceGuide}
+                    className="px-3 py-1.5 bg-violet-700 hover:bg-violet-600 text-white rounded-lg text-[10px] font-semibold flex items-center gap-1.5 transition-colors"
+                  >
+                    <Plus className="w-3.5 h-3.5" /> Thêm hướng dẫn
+                  </button>
+                ) : (
+                  <button
+                    onClick={removeGuide}
+                    className="px-3 py-1.5 bg-red-950/40 border border-red-800/40 hover:bg-red-950/60 text-red-400 rounded-lg text-[10px] transition-colors"
+                  >
+                    <Trash2 className="w-3.5 h-3.5 inline mr-1" /> Xóa
+                  </button>
+                )}
+              </div>
+            </div>
+          </div>
+
+          {guideAdded && (
+            <div className="px-5 py-3 text-[11px] text-gray-300 leading-relaxed max-h-48 overflow-y-auto">
+              <p className="text-green-400 text-[10px] font-semibold mb-2">✅ Đã thêm hướng dẫn tham khảo vào "Điều bắt buộc"</p>
+              <p className="text-gray-500 text-[10px]">
+                Xem và chỉnh sửa nội dung đầy đủ trong ô "ĐIỀU BẮT BUỘC PHẢI TUÂN THỦ" bên dưới.
+              </p>
+            </div>
+          )}
+
+          {!guideAdded && (
+            <div className="px-5 py-4 text-center text-gray-500 text-xs">
+              ⚠️ Chưa có hướng dẫn tham khảo. Bấm "Thêm hướng dẫn" để cài đặt.
+              <br />
+              <span className="text-gray-600">(Hướng dẫn này sẽ được đẩy vào AI mỗi lần viết)</span>
+            </div>
+          )}
+        </div>
+
+        {/* ══════════════════════════════════════════════
+            🔒 RÀNG BUỘC CỨNG AI
         ══════════════════════════════════════════════ */}
         <div className="bg-neutral-900 border border-red-900/30 rounded-2xl overflow-hidden">
-          {/* Header toggle */}
           <button
             onClick={() => setHardExpanded(!hardExpanded)}
             className="w-full flex items-center justify-between px-5 py-4 hover:bg-neutral-800/40 transition-colors"
@@ -566,7 +707,6 @@ export default function Page4Rules({ state, updateState, onNavigate }: Page4Rule
 
           {hardExpanded && (
             <div className="px-5 pb-5 border-t border-neutral-800 pt-4 space-y-5">
-              {/* Bật/tắt tất cả */}
               <div className="flex items-center justify-between">
                 <p className="text-[10px] text-gray-500 leading-relaxed max-w-lg">
                   <span className="text-red-400">●</span> Đỏ = quan trọng cao &nbsp;
@@ -589,7 +729,6 @@ export default function Page4Rules({ state, updateState, onNavigate }: Page4Rule
                 </div>
               </div>
 
-              {/* Grid theo nhóm */}
               {groups.map(group => {
                 const groupRules = RULE_DEFS.filter(r => r.group === group);
                 const colorClass = GROUP_COLORS[group] || 'text-gray-400';
@@ -615,7 +754,6 @@ export default function Page4Rules({ state, updateState, onNavigate }: Page4Rule
                 );
               })}
 
-              {/* Preview prompt */}
               <details className="group">
                 <summary className="cursor-pointer text-[10px] text-gray-600 hover:text-gray-400 flex items-center gap-1 select-none">
                   <span className="group-open:rotate-90 transition-transform inline-block">▶</span>
@@ -631,7 +769,7 @@ export default function Page4Rules({ state, updateState, onNavigate }: Page4Rule
           )}
         </div>
 
-        {/* ── Điều bắt buộc và Cấm kỵ (giữ nguyên) ── */}
+        {/* ── Điều bắt buộc và Cấm kỵ ── */}
         <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
           <div className="bg-neutral-900 border border-neutral-850 rounded-xl p-5 space-y-3">
             <h3 className="text-sm font-bold text-emerald-400 flex items-center gap-1.5 font-sans">
@@ -639,7 +777,7 @@ export default function Page4Rules({ state, updateState, onNavigate }: Page4Rule
             </h3>
             <p className="text-[10px] text-gray-400">Các điều khoản AI bắt buộc tự giác chèn, lồng ghép hoặc hành động trong chương truyện.</p>
             <textarea
-              rows={5}
+              rows={10}
               placeholder="Ví dụ:
 - Luôn gọi đúng danh xưng theo mối quan hệ đã thiết lập (Sư tôn gọi đồ nhi, Phu thê xưng ái tử).
 - Cảnh mây mưa phải viết cực kỳ bốc lửa, tả dung nhan mỹ nhân ghen ghét hay mê man chi tiết."
@@ -655,7 +793,7 @@ export default function Page4Rules({ state, updateState, onNavigate }: Page4Rule
             </h3>
             <p className="text-[10px] text-gray-400">Những chi tiết mà AI tuyệt đối không được viết (tránh OOC, phá vỡ logic nguyên tác).</p>
             <textarea
-              rows={5}
+              rows={10}
               placeholder="Ví dụ:
 - Nghiêm cấm Trần Phong bị lùi bước hèn nhát trước kẻ địch.
 - Cấm để các nữ chính ghen tuông sinh hận phản bội nam chính.
@@ -667,7 +805,7 @@ export default function Page4Rules({ state, updateState, onNavigate }: Page4Rule
           </div>
         </div>
 
-        {/* ── Dung lượng — chuyển sang Trang Sáng Tác ── */}
+        {/* ── Dung lượng ── */}
         <div className="bg-neutral-900/50 border border-neutral-800/50 rounded-xl p-4 flex items-start gap-3">
           <Scale className="w-4 h-4 text-gray-600 shrink-0 mt-0.5" />
           <div>
@@ -698,13 +836,18 @@ export default function Page4Rules({ state, updateState, onNavigate }: Page4Rule
         </div>
 
         {/* ══════════════════════════════════════════════
-            📚 LORE & TÀI NGUYÊN TRUYỆN — Section mới
+            📚 LORE & TÀI NGUYÊN TRUYỆN
         ══════════════════════════════════════════════ */}
         <LoreSection state={state} updateState={updateState} />
 
         {/* ── Mẹo ── */}
         <div className="p-4 bg-red-950/20 border border-red-900/40 rounded-xl text-xs text-red-300 leading-relaxed">
           💡 <strong>Mẹo nhỏ cho tác giả:</strong> Hệ thống tự động đẩy toàn bộ dàn nhân vật kết nối chồng/vợ/cừu hận cũng như các môn phái mà bạn thiết lập ở <strong>Trang 3</strong> vào khu vực trí nhớ của AI. AI sẽ phân tích mối quan hệ để viết chuẩn xác mạch truyện logic, không sợ OOC. <strong>Ràng buộc cứng ở trên sẽ được tự động chèn vào mọi lần gọi AI.</strong>
+          {state.config.referenceFileContent && (
+            <span className="block mt-1 text-green-400/80">
+              ✅ Đã có dữ liệu gốc ({formatFileSize(new Blob([state.config.referenceFileContent]).size)}) — chức năng "Viết lại" và "Nhảy cảnh" đã sẵn sàng.
+            </span>
+          )}
         </div>
 
         {/* ── Nav ── */}
@@ -741,4 +884,11 @@ export default function Page4Rules({ state, updateState, onNavigate }: Page4Rule
       </div>
     </div>
   );
+}
+
+// ─── Helper: formatFileSize ──────────────────────────────────────────────────
+function formatFileSize(bytes: number): string {
+  if (bytes < 1024) return `${bytes} B`;
+  if (bytes < 1024 * 1024) return `${(bytes / 1024).toFixed(1)} KB`;
+  return `${(bytes / (1024 * 1024)).toFixed(2)} MB`;
 }

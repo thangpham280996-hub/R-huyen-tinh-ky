@@ -3,11 +3,11 @@ import {
   Sparkles, FileText, Upload, Settings, Plus, Key,
   Check, Trash2, Wifi, WifiOff, Loader2, AlertCircle,
   CheckCircle2, PenTool, ChevronRight, ChevronDown, BookOpen,
-  HardDrive, Image as ImageIcon, ListTree
+  HardDrive, Image as ImageIcon, ListTree, Download, Users, Clock, Database, ShieldCheck
 } from 'lucide-react';
 import { NovelState, ApiKeyConfig } from '../types';
 import FanficAnalyzer from './FanficAnalyzer';
-import { callApi } from '../utils/api'; // 👈 THÊM IMPORT
+import { callApi } from '../utils/api';
 
 interface Page1StartProps {
   state: NovelState;
@@ -47,7 +47,6 @@ const CATIECLI_MODELS = [
 
 const MODEL_LISTABLE_PROVIDERS: ProviderValue[] = ['antigravity', 'catiecli', 'openai', 'claude', 'grok'];
 
-// 👈 SỬA HÀM testConnection
 async function testConnection(key: ApiKeyConfig): Promise<{ ok: boolean; msg: string }> {
   try {
     const body: Record<string, any> = {
@@ -63,7 +62,6 @@ async function testConnection(key: ApiKeyConfig): Promise<{ ok: boolean; msg: st
       body.customEndpoint = 'https://ag.beijixingxing.com/v1/chat/completions';
     }
     
-    // 👈 SỬA: Dùng callApi thay vì fetch trực tiếp
     const data = await callApi('generate', body);
     const text = (data.text || '').trim();
     return { ok: true, msg: `✓ OK${text ? ` · "${text.substring(0, 30)}"` : ''}` };
@@ -72,7 +70,6 @@ async function testConnection(key: ApiKeyConfig): Promise<{ ok: boolean; msg: st
   }
 }
 
-// 👈 SỬA HÀM fetchModelsList
 async function fetchModelsList(apiKey: string, provider: ProviderValue): Promise<string[]> {
   try {
     const data = await callApi('list-models', {
@@ -115,6 +112,12 @@ export default function Page1Start({ state, updateState, onNavigate, onEnterNewW
     (acc, c) => acc + (c.content?.split(/\s+/).filter(Boolean).length || 0), 0
   );
 
+  // ─── STATS ─────────────────────────────────────────────────────────────────
+  const totalCharacters = state.characters?.length || 0;
+  const totalChapters = state.chapters?.length || 0;
+  const totalEvents = state.storyEvents?.length || 0;
+  const totalWorlds = state.worldEntities?.length || 0;
+
   const storageInfo = useMemo(() => {
     const jsonStr = JSON.stringify(state);
     const totalBytes = new Blob([jsonStr]).size;
@@ -127,6 +130,27 @@ export default function Page1Start({ state, updateState, onNavigate, onEnterNewW
 
   const isLarge = storageInfo.totalBytes > 5 * 1024 * 1024;
 
+  // ─── HANDLE: Export Project ──────────────────────────────────────────────
+  const handleExportProject = () => {
+    const data = JSON.stringify(state, null, 2);
+    const blob = new Blob([data], { type: 'application/json' });
+    const url = URL.createObjectURL(blob);
+    const a = document.createElement('a');
+    a.href = url;
+    a.download = `Project_${state.config.title || 'Untitled'}_${new Date().toISOString().slice(0,10)}.json`;
+    a.click();
+    URL.revokeObjectURL(url);
+  };
+
+  // ─── HANDLE: Clear Data ──────────────────────────────────────────────────
+  const handleClearData = () => {
+    if (confirm('⚠️ Xóa toàn bộ dữ liệu? Hành động này không thể hoàn tác!')) {
+      localStorage.clear();
+      window.location.reload();
+    }
+  };
+
+  // ─── HANDLE: Import JSON ─────────────────────────────────────────────────
   const handleJsonUpload = (e: React.ChangeEvent<HTMLInputElement>) => {
     const file = e.target.files?.[0];
     if (!file) return;
@@ -163,6 +187,7 @@ export default function Page1Start({ state, updateState, onNavigate, onEnterNewW
           prev.rules         = parsed.rules         || prev.rules;
           prev.chapters      = parsed.chapters      || [];
           prev.apiKeys       = parsed.apiKeys       || prev.apiKeys;
+          prev.storyEvents   = parsed.storyEvents   || [];
           if (prev.chapters.length > 0) {
             prev.currentChapterId = prev.chapters[prev.chapters.length - 1].id;
           }
@@ -170,17 +195,20 @@ export default function Page1Start({ state, updateState, onNavigate, onEnterNewW
 
         const imgCount = (parsed.characters || []).reduce((acc: number, c: any) => acc + (c.images?.length || 0), 0);
         alert(
-          `Tải dữ liệu JSON thành công! ${parsed.chapters.length} chương, ${parsed.characters.length} nhân vật.` +
-          `${imgCount > 0 ? `\n📷 Đã khôi phục ${imgCount} ảnh tham chiếu nhân vật.` : ''}`
+          `✅ Tải dữ liệu JSON thành công!\n\n` +
+          `📚 ${parsed.chapters.length} chương\n` +
+          `👤 ${parsed.characters.length} nhân vật\n` +
+          `📷 ${imgCount} ảnh tham chiếu`
         );
         onNavigate('compose');
       } catch {
-        alert('Có lỗi khi đọc file JSON — file có thể bị hỏng hoặc không phải JSON hợp lệ.');
+        alert('❌ Có lỗi khi đọc file JSON — file có thể bị hỏng hoặc không phải JSON hợp lệ.');
       }
     };
     reader.readAsText(file);
   };
 
+  // ─── HANDLE: Fanfiction Upload ──────────────────────────────────────────
   const handleFanfictionUpload = (e: React.ChangeEvent<HTMLInputElement>) => {
     const file = e.target.files?.[0];
     if (!file) return;
@@ -192,11 +220,12 @@ export default function Page1Start({ state, updateState, onNavigate, onEnterNewW
         prev.config.referenceFileName    = file.name;
         if (!prev.config.genres.includes('Đồng nhân')) prev.config.genres.push('Đồng nhân');
       });
-      alert(`Đã nạp bối cảnh gốc từ [${file.name}]!`);
+      alert(`✅ Đã nạp bối cảnh gốc từ [${file.name}]!`);
     };
     reader.readAsText(file);
   };
 
+  // ─── HANDLE: Add Key ─────────────────────────────────────────────────────
   const handleAddKey = () => {
     if (!newKey.trim()) { alert('Vui lòng nhập API Key'); return; }
     const keyObj: ApiKeyConfig = {
@@ -275,6 +304,7 @@ export default function Page1Start({ state, updateState, onNavigate, onEnterNewW
   return (
     <div className="max-w-4xl mx-auto py-3 px-4 space-y-3">
 
+      {/* ─── HEADER ─── */}
       <div className="text-center">
         <div className="inline-flex items-center gap-2 mb-1">
           <div className="p-1.5 bg-red-950/40 border border-red-500/30 rounded-lg">
@@ -289,6 +319,7 @@ export default function Page1Start({ state, updateState, onNavigate, onEnterNewW
         </p>
       </div>
 
+      {/* ─── LƯU Ý ─── */}
       <div className="p-3 bg-amber-950/20 border border-amber-800/40 rounded-xl text-[11px] text-amber-300 leading-relaxed flex items-start gap-2">
         <AlertCircle className="w-4 h-4 shrink-0 mt-0.5" />
         <div>
@@ -298,6 +329,27 @@ export default function Page1Start({ state, updateState, onNavigate, onEnterNewW
         </div>
       </div>
 
+      {/* ─── STATS CARDS ─── */}
+      <div className="grid grid-cols-2 md:grid-cols-4 gap-2">
+        <div className="bg-neutral-900/60 border border-neutral-800 rounded-xl p-3 text-center">
+          <p className="text-xl font-bold text-gray-200">{totalCharacters}</p>
+          <p className="text-[10px] text-gray-500 uppercase tracking-wider">Nhân vật</p>
+        </div>
+        <div className="bg-neutral-900/60 border border-neutral-800 rounded-xl p-3 text-center">
+          <p className="text-xl font-bold text-gray-200">{totalChapters}</p>
+          <p className="text-[10px] text-gray-500 uppercase tracking-wider">Chương</p>
+        </div>
+        <div className="bg-neutral-900/60 border border-neutral-800 rounded-xl p-3 text-center">
+          <p className="text-xl font-bold text-gray-200">{totalWorlds}</p>
+          <p className="text-[10px] text-gray-500 uppercase tracking-wider">Thế giới</p>
+        </div>
+        <div className="bg-neutral-900/60 border border-neutral-800 rounded-xl p-3 text-center">
+          <p className="text-xl font-bold text-gray-200">{totalEvents}</p>
+          <p className="text-[10px] text-gray-500 uppercase tracking-wider">Sự kiện</p>
+        </div>
+      </div>
+
+      {/* ─── ĐANG VIẾT ─── */}
       {hasProject && (
         <button
           onClick={() => onNavigate('compose')}
@@ -322,6 +374,7 @@ export default function Page1Start({ state, updateState, onNavigate, onEnterNewW
         </button>
       )}
 
+      {/* ─── 4 NÚT CHỨC NĂNG ─── */}
       <div className="grid grid-cols-2 gap-2.5">
         <button
           onClick={onEnterNewWorld}
@@ -376,7 +429,7 @@ export default function Page1Start({ state, updateState, onNavigate, onEnterNewW
 
         <div className="flex items-center gap-2.5 p-3 rounded-xl bg-neutral-900/60 border border-neutral-800 text-left">
           <div className="p-2 rounded-lg bg-neutral-800 border border-neutral-700 text-neutral-400 shrink-0">
-            <Settings className="w-4 h-4" />
+            <Database className="w-4 h-4" />
           </div>
           <div className="min-w-0">
             <h3 className="text-xs font-bold text-gray-100">Bảo mật dữ liệu</h3>
@@ -387,6 +440,7 @@ export default function Page1Start({ state, updateState, onNavigate, onEnterNewW
         </div>
       </div>
 
+      {/* ─── DUNG LƯỢNG ─── */}
       {(state.characters.length > 0 || state.chapters.length > 0) && (
         <div className={`rounded-xl border p-3 flex items-center justify-between gap-3 ${
           isLarge ? 'bg-amber-950/20 border-amber-800/40' : 'bg-neutral-900/60 border-neutral-800'
@@ -413,6 +467,64 @@ export default function Page1Start({ state, updateState, onNavigate, onEnterNewW
         </div>
       )}
 
+      {/* ─── HÀNG NGANG QUẢN LÝ DỮ LIỆU ─── */}
+      <div className="flex flex-wrap items-center justify-between gap-2 p-3 bg-neutral-900/40 border border-neutral-800 rounded-xl">
+        <div className="flex items-center gap-2">
+          <Database className="w-3.5 h-3.5 text-gray-500" />
+          <span className="text-[10px] text-gray-500">Dữ liệu:</span>
+          <span className="text-[10px] font-mono text-gray-300">{formatBytes(storageInfo.totalBytes)}</span>
+        </div>
+        <div className="flex flex-wrap items-center gap-2">
+          <button
+            onClick={handleExportProject}
+            className="px-3 py-1.5 bg-amber-950/30 hover:bg-amber-950/50 border border-amber-700/30 text-amber-300 rounded-lg text-[10px] font-medium flex items-center gap-1.5 transition-all"
+          >
+            <Download className="w-3 h-3" />
+            Tải JSON
+          </button>
+          <button
+            onClick={handleClearData}
+            className="px-3 py-1.5 bg-red-950/20 hover:bg-red-950/40 border border-red-800/20 text-red-400 rounded-lg text-[10px] font-medium flex items-center gap-1.5 transition-all"
+          >
+            <Trash2 className="w-3 h-3" />
+            Xóa dữ liệu
+          </button>
+        </div>
+      </div>
+
+      {/* ─── 4 NÚT ĐIỀU HƯỚNG NHANH ─── */}
+      <div className="grid grid-cols-2 md:grid-cols-4 gap-2">
+        <button
+          onClick={() => onNavigate('idea')}
+          className="flex flex-col items-center gap-1 p-3 bg-neutral-900/40 border border-neutral-800 hover:border-amber-700/40 rounded-xl transition-all group"
+        >
+          <Sparkles className="w-5 h-5 text-amber-400 group-hover:scale-110 transition-transform" />
+          <span className="text-[10px] text-gray-500 group-hover:text-gray-300">Ý tưởng</span>
+        </button>
+        <button
+          onClick={() => onNavigate('characters')}
+          className="flex flex-col items-center gap-1 p-3 bg-neutral-900/40 border border-neutral-800 hover:border-red-700/40 rounded-xl transition-all group"
+        >
+          <Users className="w-5 h-5 text-red-400 group-hover:scale-110 transition-transform" />
+          <span className="text-[10px] text-gray-500 group-hover:text-gray-300">Nhân vật</span>
+        </button>
+        <button
+          onClick={() => onNavigate('rules')}
+          className="flex flex-col items-center gap-1 p-3 bg-neutral-900/40 border border-neutral-800 hover:border-amber-700/40 rounded-xl transition-all group"
+        >
+          <ShieldCheck className="w-5 h-5 text-amber-400 group-hover:scale-110 transition-transform" />
+          <span className="text-[10px] text-gray-500 group-hover:text-gray-300">Quy tắc</span>
+        </button>
+        <button
+          onClick={() => onNavigate('compose')}
+          className="flex flex-col items-center gap-1 p-3 bg-neutral-900/40 border border-neutral-800 hover:border-red-700/40 rounded-xl transition-all group"
+        >
+          <PenTool className="w-5 h-5 text-red-400 group-hover:scale-110 transition-transform" />
+          <span className="text-[10px] text-gray-500 group-hover:text-gray-300">Sáng tác</span>
+        </button>
+      </div>
+
+      {/* ─── API KEYS ─── */}
       <div className="bg-neutral-900/80 border border-neutral-800 rounded-xl overflow-hidden">
         <button
           onClick={() => setKeysExpanded(!keysExpanded)}
@@ -656,6 +768,17 @@ export default function Page1Start({ state, updateState, onNavigate, onEnterNewW
         )}
       </div>
 
+      {/* ─── FOOTER ─── */}
+      <div className="text-center pt-2 border-t border-neutral-800/50">
+        <p className="text-[9px] text-gray-700">
+          StoryCraft Pro v2.0 · Dữ liệu lưu trữ cục bộ ·
+          <button onClick={handleExportProject} className="text-amber-700 hover:text-amber-600 ml-1 transition-colors">
+            Xuất JSON
+          </button>
+        </p>
+      </div>
+
+      {/* ─── FANFIC ANALYZER ─── */}
       {showAnalyzer && (
         <FanficAnalyzer
           state={state}

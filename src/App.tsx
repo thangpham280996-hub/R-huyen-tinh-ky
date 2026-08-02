@@ -108,12 +108,14 @@ const makeInitialState = (title = ''): NovelState => ({
       noRepeatContent: true, noMetaComments: true, noOOCPersonality: true,
       noModernSlangInAncient: true, noAncientToneInModern: false,
       noAbruptResolution: true, noSummaryMode: true, noExcessiveEllipsis: true,
+      noFutureCharacters: true, noSelfAddPlot: true, noDangerousTone: false,
     },
     loreEntries: [],
   },
   chapters: [],
   currentChapterId: '',
   apiKeys: [],
+  storyEvents: [],
 });
 
 // ─── Project Storage helpers ──────────────────────────────────────────────────

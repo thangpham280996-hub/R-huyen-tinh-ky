@@ -19,6 +19,34 @@ function isOpenAICompatible(provider: string): boolean {
   );
 }
 
+// ─── FIX VIETNAMESE TEXT ────────────────────────────────────────────────────
+function fixVietnameseText(text: string): string {
+  if (!text) return text;
+
+  // Bảng quy đổi ký tự dấu "rời" (spacing modifier) mà AI/proxy hay trả lẫn vào text
+  // thành dấu kết hợp (combining) chuẩn Unicode để normalize('NFC') gộp đúng.
+  const strayToCombining: Record<string, string> = {
+    '\u0060': '\u0300', // ` → dấu huyền kết hợp
+    '\u00B4': '\u0301', // ´ → dấu sắc kết hợp
+    '\u02C6': '\u0302', // ˆ → dấu mũ kết hợp (hiếm gặp)
+    '\u02DC': '\u0303', // ˜ → dấu ngã kết hợp
+    '\u02D9': '\u0323', // ˙ → dấu nặng kết hợp (hiếm gặp)
+  };
+
+  let fixed = text;
+
+  // Bước 1: đổi dấu rời thành dấu kết hợp (cùng vị trí, ngay sau nguyên âm)
+  fixed = fixed.replace(/[\u0060\u00B4\u02C6\u02DC\u02D9]/g, (m) => strayToCombining[m] || '');
+
+  // Bước 2: chuẩn hoá NFC — gộp base letter + combining mark còn ghép được thành 1 ký tự đúng
+  fixed = fixed.normalize('NFC');
+
+  // Bước 3: xoá phần dấu dư thừa còn sót lại sau normalize
+  fixed = fixed.replace(/[\u0300-\u036f]/g, '');
+
+  return fixed;
+}
+
 export const handler: Handler = async (event) => {
   if (event.httpMethod !== "POST") {
     return { statusCode: 405, body: JSON.stringify({ error: "Method not allowed" }) };
@@ -104,7 +132,7 @@ export const handler: Handler = async (event) => {
         body: JSON.stringify({
           model,
           messages,
-          max_tokens: 16000, // 👈 Tăng từ 8192 lên 16000
+          max_tokens: 16000,
           temperature: 0.9,
           stream: false,
         }),
@@ -114,7 +142,7 @@ export const handler: Handler = async (event) => {
         const data = await response.json();
         const text = data?.choices?.[0]?.message?.content || data?.choices?.[0]?.text || "";
         if (text) {
-          return { statusCode: 200, body: JSON.stringify({ text, model_used: model }) };
+          return { statusCode: 200, body: JSON.stringify({ text: fixVietnameseText(text), model_used: model }) };
         }
       }
 
@@ -149,7 +177,7 @@ export const handler: Handler = async (event) => {
     });
 
     const text = response.text || "";
-    return { statusCode: 200, body: JSON.stringify({ text }) };
+    return { statusCode: 200, body: JSON.stringify({ text: fixVietnameseText(text) }) };
   } catch (error: any) {
     console.error("API Error:", error);
     return {

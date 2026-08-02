@@ -1,7 +1,8 @@
 {
-  "name": "react-example",
+  "name": "storycraft-pro",
   "private": true,
-  "version": "0.0.0",
+  "version": "2.0.0",
+  "description": "Sáng tác tiểu thuyết mạng AI không giới hạn",
   "type": "module",
   "scripts": {
     "dev": "tsx server.ts",
@@ -10,6 +11,16 @@
     "clean": "rm -rf dist server.js",
     "lint": "tsc --noEmit"
   },
+  "keywords": [
+    "react",
+    "typescript",
+    "vite",
+    "ai",
+    "storytelling",
+    "novel"
+  ],
+  "author": "StoryCraft Pro",
+  "license": "MIT",
   "dependencies": {
     "@google/genai": "^2.4.0",
     "@tailwindcss/vite": "^4.1.14",
@@ -32,7 +43,9 @@
     "esbuild": "^0.25.0",
     "tailwindcss": "^4.1.14",
     "tsx": "^4.21.0",
-    "typescript": "~5.8.2",
-    "vite": "^6.2.3"
+    "typescript": "~5.8.2"
+  },
+  "engines": {
+    "node": ">=18.0.0"
   }
 }
