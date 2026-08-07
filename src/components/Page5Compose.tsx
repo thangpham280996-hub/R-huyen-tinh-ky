@@ -3,9 +3,9 @@ import {
   Sparkles, PenTool, Plus, Trash2, Undo, Loader2,
   AlertCircle, FileText, AlignLeft, Info,
   MessageSquare, Send, Bot, User, RotateCcw, ChevronDown, BookOpen, Clock,
-  ChevronUp, Download
+  ChevronUp, Download, CheckCircle2
 } from 'lucide-react';
-import { buildHardRulesPrompt } from './Page4Rules';
+import { buildHardRulesPrompt, buildLexiconPrompt } from './Page4Rules';
 import { NovelState, Chapter, Character, filterByCurrentPoint } from '../types';
 import { callApi } from '../utils/api';
 
@@ -58,39 +58,60 @@ const WRITE_MODES = [
 
 // ─── CONSTANTS - GIỚI HẠN CONTEXT ──────────────────────────────────────────
 const MAX_PREV_CHAPTERS = 1;
-const MAX_TAIL_LENGTH = 800;
+const MAX_TAIL_LENGTH = 1500;
 const MAX_STORY_EVENTS = 10;
 const MAX_LORE_ENTRIES = 5;
 const MAX_REFERENCE_LENGTH = 500;
 const MAX_CHAT_CONTEXT = 2000;
 
+// ─── splitIntoScenes cải thiện ─────────────────────────────────────────────
 function splitIntoScenes(text: string): { label: string; content: string }[] {
   if (!text || text.trim().length < 50) return [];
   const scenes: { label: string; content: string }[] = [];
-  
-  const chapterMatches = [...text.matchAll(/(?:Chương|Chapter)\s+(\d+)[：:.\s]+([^\n]*)/gi)];
+
+  const chapterMatches = [...text.matchAll(
+    /(?:Chương|Chapter|Đoạn|Phần|Arc)\s*(\d+)(?:[：:.\s\-]+([^\n]*))?/gi
+  )];
+
   if (chapterMatches.length > 1) {
     return chapterMatches.map((m, i) => {
       const start = m.index!;
       const end = i < chapterMatches.length - 1 ? chapterMatches[i + 1].index! : text.length;
       const chapterNum = m[1] || (i + 1);
-      const title = m[2]?.trim() || `Chương ${chapterNum}`;
-      return { label: `Chương ${chapterNum}: ${title}`, content: text.slice(start, end).trim() };
+      const title = m[2]?.trim() || '';
+      const prefix = m[0].match(/^[^\d]*/)?.[0]?.trim() || 'Chương';
+      return {
+        label: `${prefix} ${chapterNum}${title ? `: ${title}` : ''}`,
+        content: text.slice(start, end).trim()
+      };
     });
   }
-  
-  const separators = text.match(/\n\s*[\*\-]{3,}\s*\n/g);
+
+  const separators = text.match(/\n\s*[\*\-=\#]{3,}\s*\n/g);
   if (separators && separators.length > 0) {
-    const parts = text.split(/\n\s*[\*\-]{3,}\s*\n/);
-    parts.forEach((part, i) => { if (part.trim()) scenes.push({ label: `Đoạn ${i + 1}`, content: part.trim() }); });
+    const parts = text.split(/\n\s*[\*\-=\#]{3,}\s*\n/);
+    parts.forEach((part, i) => {
+      if (part.trim()) scenes.push({ label: `Đoạn ${i + 1}`, content: part.trim() });
+    });
     return scenes;
   }
-  
-  const CHUNK_SIZE = 3000;
-  for (let i = 0; i < text.length; i += CHUNK_SIZE) {
-    const chunk = text.slice(i, i + CHUNK_SIZE);
-    if (chunk.trim()) scenes.push({ label: `Đoạn ${scenes.length + 1}`, content: chunk.trim() });
+
+  if (text.length > 5000) {
+    const CHUNK_SIZE = 3000;
+    for (let i = 0; i < text.length; i += CHUNK_SIZE) {
+      const chunk = text.slice(i, i + CHUNK_SIZE);
+      if (chunk.trim()) {
+        const preview = chunk.trim().slice(0, 40).replace(/\n/g, ' ');
+        scenes.push({
+          label: `Khối ${scenes.length + 1}${preview ? ` — ${preview}...` : ''}`,
+          content: chunk.trim()
+        });
+      }
+    }
+    return scenes;
   }
+
+  scenes.push({ label: 'Toàn bộ nội dung', content: text.trim() });
   return scenes;
 }
 
@@ -134,7 +155,10 @@ export function buildSystemInstruction(state: NovelState): string {
     
     const personality = c.personality?.slice(0, 60) || '';
     const appearance = c.appearance?.slice(0, 60) || '';
-    return `${c.name}(${c.role},${c.gender}): ${personality}${appearance ? `, ${appearance}` : ''}${rels ? `, qh:${rels}` : ''}`;
+    const abilities = (c.abilities || []).slice(0, 3).map(a => `${a.name}(${a.type})`).join(', ');
+    const fashion = (c.fashionStyles || []).slice(0, 2).map(f => `${f.name}[${f.context}]`).join(', ');
+    
+    return `${c.name}(${c.role},${c.gender}): ${personality}${appearance ? `, ${appearance}` : ''}${abilities ? `, kỹ năng:${abilities}` : ''}${fashion ? `, trang phục:${fashion}` : ''}${rels ? `, qh:${rels}` : ''}`;
   }).join('\n');
 
   const storyEvents = (state.storyEvents || [])
@@ -149,12 +173,10 @@ export function buildSystemInstruction(state: NovelState): string {
     .map(e => `[${e.category}] ${e.title}: ${e.content.slice(0, 100)}`)
     .join('\n');
 
-  const hardRulesBlock = rules?.hardRules
-    ? Object.entries(rules.hardRules)
-        .filter(([, v]) => v)
-        .map(([k]) => `- CẤM ${k.replace(/([A-Z])/g, ' $1').trim()}`)
-        .join('\n')
-    : '';
+  // 👈 SỬA 1: Gọi buildHardRulesPrompt thay vì tự viết Object.entries
+  const hardRulesBlock = buildHardRulesPrompt(rules?.hardRules);
+
+  const lexiconBlock = buildLexiconPrompt(state.rules.sexualLexicon);
 
   let refSection = '';
   if (config.referenceFileContent) {
@@ -166,18 +188,24 @@ export function buildSystemInstruction(state: NovelState): string {
 
   const existingCharNames = visibleCharacters.map(c => c.name).join(', ') || 'Chưa có';
 
+  // 👈 SỬA 2: Xóa các dòng đã có trong hardRulesBlock
   const behaviorConstraints = `
-⛔ RÀNG BUỘC:
+⛔ RÀNG BUỘC BỔ SUNG:
 - CHỈ viết theo mệnh lệnh, KHÔNG tự thêm nhân vật/tình tiết
-- KHÔNG kết thúc cảnh, KHÔNG nhảy thời gian
 - KHÔNG nhắc nhân vật chưa xuất hiện: ${existingCharNames}
-- Giữ đúng tính cách nhân vật
 - Mô tả nhân vật/thế lực bên dưới là TÀI LIỆU THAM KHẢO, KHÔNG PHẢI cụm từ để chép lại nguyên văn. TUYỆT ĐỐI không lặp lại đúng nguyên cụm mô tả (ví dụ "mỹ nhân bác sĩ") nhiều lần trong bài viết — mỗi lần nhắc tới ngoại hình/thân phận nhân vật, hãy diễn đạt lại bằng câu chữ khác, góc nhìn khác, hoặc lồng ghép tự nhiên vào hành động/đối thoại thay vì lặp thành nhãn dán cố định.`;
 
   const timelineNotice = currentOrder !== undefined
     ? `\n[MỐC HIỆN TẠI]: ${config.currentStoryPoint?.label || `#${currentOrder}`}\nCHỈ dùng thông tin ĐẾN mốc này.`
     : '';
 
+  const worldSummary = visibleWorldEntities.map(w => {
+    const traits = w.speciesTraits;
+    const extra = traits ? ` [${traits.threatLevel}, yếu:${traits.weakness?.slice(0, 20)}, ${traits.abilities?.length || 0} chiêu]` : '';
+    return `${w.name}(${w.type}): ${w.description.slice(0, 60)}${extra}`;
+  }).join('\n') || 'Chưa có';
+
+  // 👈 SỬA 3: Đặt hardRulesBlock trước behaviorConstraints
   return `Truyện: ${config.title || 'Chưa đặt tên'} - ${config.genres.join(', ')}
 Bối cảnh: ${config.context?.slice(0, 150) || 'Chưa mô tả'}
 Văn phong: ${config.writingStyle || ''} ${config.customStyle || ''}
@@ -187,7 +215,7 @@ NHÂN VẬT:
 ${charSummary || 'Chưa có'}
 
 THẾ LỰC:
-${visibleWorldEntities.map(w => `${w.name}(${w.type}): ${w.description.slice(0, 60)}`).join('\n') || 'Chưa có'}
+${worldSummary}
 
 SỰ KIỆN GẦN ĐÂY:
 ${storyEvents || 'Chưa có'}
@@ -195,9 +223,11 @@ ${storyEvents || 'Chưa có'}
 LORE:
 ${loreSummary || 'Chưa có'}
 
-${behaviorConstraints}
 ${hardRulesBlock}
-${refSection}`;
+
+${behaviorConstraints}
+${refSection}
+${lexiconBlock}`;
 }
 
 // ─── RÚT GỌN: buildWritePrompt ────────────────────────────────────────────
@@ -269,9 +299,30 @@ export default function Page5Compose({ state, updateState, onNavigate }: Page5Co
   const [previousContent, setPreviousContent] = useState<string | null>(null);
   const [selectedRange, setSelectedRange] = useState<number>(1500);
 
-  const [writeMode, setWriteMode] = useState<'continue' | 'rewrite' | 'scene' | 'reborn'>('continue');
-  const [sourceSceneText, setSourceSceneText] = useState('');
-  const [rebornCharacterId, setRebornCharacterId] = useState('');
+  // ─── Persist writeMode qua state global ──────────────────────────────────
+  const [writeMode, setWriteMode] = useState<'continue' | 'rewrite' | 'scene' | 'reborn'>(
+    state.config.writeMode || 'continue'
+  );
+
+  const handleSetWriteMode = (mode: 'continue' | 'rewrite' | 'scene' | 'reborn') => {
+    setWriteMode(mode);
+    updateState((prev) => {
+      prev.config.writeMode = mode;
+    });
+  };
+
+  // ─── Persist sourceSceneText và rebornCharacterId ────────────────────────
+  const [sourceSceneText, setSourceSceneText] = useState(state.config.sourceSceneText || '');
+  const [rebornCharacterId, setRebornCharacterId] = useState(state.config.rebornCharacterId || '');
+
+  useEffect(() => {
+    updateState((prev) => {
+      prev.config.sourceSceneText = sourceSceneText;
+      prev.config.rebornCharacterId = rebornCharacterId;
+    });
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [sourceSceneText, rebornCharacterId]);
+
   const [sceneSearch, setSceneSearch] = useState('');
   const scenes = useMemo(
     () => splitIntoScenes(state.config.referenceFileContent || ''),
@@ -281,6 +332,9 @@ export default function Page5Compose({ state, updateState, onNavigate }: Page5Co
     !sceneSearch || s.label.toLowerCase().includes(sceneSearch.toLowerCase())
   );
 
+  // ─── State chọn sự kiện ──────────────────────────────────────────────────
+  const [selectedEventId, setSelectedEventId] = useState<string>('');
+
   const [rightTab, setRightTab] = useState<'write' | 'chat'>('write');
   const [chatMessages, setChatMessages] = useState<ChatMessage[]>([]);
   const [chatInput, setChatInput] = useState('');
@@ -289,6 +343,9 @@ export default function Page5Compose({ state, updateState, onNavigate }: Page5Co
   const [savedToLore, setSavedToLore] = useState<Set<string>>(new Set());
   const chatEndRef = useRef<HTMLDivElement>(null);
   const textareaRef = useRef<HTMLTextAreaElement>(null);
+
+  const [summaryLoading, setSummaryLoading] = useState(false);
+  const [summaryError, setSummaryError] = useState<string | null>(null);
 
   // ─── EXPORT: Tải text truyện ──────────────────────────────────────────────
   const handleExportText = () => {
@@ -319,7 +376,6 @@ export default function Page5Compose({ state, updateState, onNavigate }: Page5Co
     URL.revokeObjectURL(url);
   };
 
-  // ─── EXPORT: Tải JSON dự án ──────────────────────────────────────────────
   const handleExportProject = () => {
     const exportData = JSON.parse(JSON.stringify(state));
     const data = JSON.stringify(exportData, null, 2);
@@ -372,10 +428,8 @@ export default function Page5Compose({ state, updateState, onNavigate }: Page5Co
     setPreviousContent(null);
   };
 
-  // ─── SỬA 1: handleUpdateField ─────────────────────────────────────────────
   const handleUpdateField = (field: keyof Omit<Chapter, 'id'>, value: string) => {
     if (!activeChapter) return;
-    // 👈 CHUẨN HÓA UNICODE NGAY KHI NHẬP
     const normalized = value.normalize('NFC');
     updateState((prev) => {
       const ch = prev.chapters.find(c => c.id === activeChapter.id);
@@ -408,7 +462,6 @@ export default function Page5Compose({ state, updateState, onNavigate }: Page5Co
     chatEndRef.current?.scrollIntoView({ behavior: 'smooth' });
   }, [chatMessages]);
 
-  // ─── RÚT GỌN: buildChatContext ────────────────────────────────────────────
   const buildChatContext = useCallback((scope: 'current' | 'all' = 'all'): string => {
     const { config, characters, worldEntities, rules, chapters, storyEvents } = state;
     
@@ -452,7 +505,6 @@ ${storyEventsSummary ? `SỰ KIỆN: ${storyEventsSummary}` : ''}
 ${chaptersSummary}`;
   }, [state, activeChapter]);
 
-  // ─── CHAT: Gửi tin nhắn ──────────────────────────────────────────────────
   const handleSendChat = async (customPrompt?: string) => {
     const input = (customPrompt || chatInput).trim();
     if (!input || chatLoading) return;
@@ -549,7 +601,6 @@ Trả lời câu hỏi của tác giả: phân tích sâu, gợi ý thực tế,
     });
   };
 
-  // ─── AI VIẾT ──────────────────────────────────────────────────────────────
   const handleAIGenerateNext = async () => {
     if (aiLoading || !activeChapter) return;
 
@@ -588,7 +639,6 @@ Trả lời câu hỏi của tác giả: phân tích sâu, gợi ý thực tế,
 
       const data = await callApi('generate', body);
 
-      // ─── SỬA 2: normalize từ AI ────────────────────────────────────────────
       const textGenerated = (data.text || '').trim().normalize('NFC');
       if (!textGenerated) throw new Error('AI trả về nội dung trống rỗng.');
 
@@ -613,6 +663,92 @@ Trả lời câu hỏi của tác giả: phân tích sâu, gợi ý thực tế,
       setAiError(err.message || 'Lỗi không xác định.');
     } finally {
       setAiLoading(false);
+    }
+  };
+
+  const handleSummarizeChapter = async () => {
+    if (!activeChapter) return;
+    
+    if (!activeChapter.content.trim()) {
+      setSummaryError('Chương đang trống, không có gì để tóm tắt.');
+      setTimeout(() => setSummaryError(null), 3000);
+      return;
+    }
+
+    const existingSummary = state.storyEvents?.find(
+      e => e.chapterId === activeChapter.id && e.title === 'Tóm tắt'
+    );
+
+    if (existingSummary) {
+      if (!confirm(`Chương "${activeChapter.title}" đã có tóm tắt. Ghi đè?`)) {
+        return;
+      }
+    }
+
+    setSummaryLoading(true);
+    setSummaryError(null);
+
+    try {
+      const prompt = `Tóm tắt chương sau thành 1-2 câu ngắn gọn (tối đa 80 từ), chỉ nêu sự kiện chính đã xảy ra, không bình luận thêm:\n\n${activeChapter.content}`;
+
+      const body: Record<string, any> = {
+        prompt: prompt,
+        provider: activeKey?.provider || 'gemini',
+      };
+
+      if (activeKey) {
+        body.customApiKey = activeKey.key;
+        if (activeKey.customModel) body.customModel = activeKey.customModel;
+        if (['openai', 'claude', 'grok', 'antigravity'].includes(activeKey.provider)) {
+          body.customEndpoint = 'https://ag.beijixingxing.com/v1/chat/completions';
+        }
+        if (activeKey.provider === 'catiecli') {
+          body.customEndpoint = 'https://catiecli.sukaka.top/v1/chat/completions';
+        }
+      }
+
+      const data = await callApi('generate', body);
+
+      const summaryText = (data.text || '').trim();
+      if (!summaryText) {
+        throw new Error('AI không trả về tóm tắt.');
+      }
+
+      const chapterIndex = chapters.findIndex(c => c.id === activeChapter.id);
+      const order = chapterIndex + 1;
+
+      const newEvent = {
+        id: Math.random().toString(36).substr(2, 9),
+        chapterId: activeChapter.id,
+        order: order,
+        chapterLabel: activeChapter.title || `Chương ${order}`,
+        title: 'Tóm tắt',
+        content: summaryText,
+        relatedCharacterIds: [],
+      };
+
+      updateState((prev) => {
+        if (!prev.storyEvents) prev.storyEvents = [];
+
+        const existingIndex = prev.storyEvents.findIndex(
+          e => e.chapterId === activeChapter.id && e.title === 'Tóm tắt'
+        );
+
+        if (existingIndex !== -1) {
+          prev.storyEvents[existingIndex] = newEvent;
+        } else {
+          prev.storyEvents.push(newEvent);
+        }
+      });
+
+      setSummaryError('✅ Đã lưu tóm tắt chương!');
+      setTimeout(() => setSummaryError(null), 2500);
+
+    } catch (err: any) {
+      setSummaryError(err.message || 'Lỗi không xác định khi tóm tắt chương.');
+      setTimeout(() => setSummaryError(null), 4000);
+    } finally {
+      setSummaryLoading(false);
     }
   };
 
@@ -694,6 +830,19 @@ Trả lời câu hỏi của tác giả: phân tích sâu, gợi ý thực tế,
                 <span className={`text-[11px] font-mono px-2.5 py-1 rounded-lg border ${currentWords < selectedOption.range[0] ? 'text-amber-500 border-amber-900/40 bg-amber-950/20' : 'text-green-400 border-green-900/40 bg-green-950/20'}`}>
                   {currentWords.toLocaleString()} từ
                 </span>
+                <button
+                  onClick={handleSummarizeChapter}
+                  disabled={summaryLoading || !activeChapter?.content.trim()}
+                  className="px-2.5 py-1 border border-blue-800/50 bg-blue-950/20 hover:bg-blue-950/50 hover:border-blue-700/60 text-blue-300 disabled:opacity-40 disabled:cursor-not-allowed rounded-lg text-[10px] font-bold transition-all flex items-center gap-1"
+                  title="Tóm tắt chương hiện tại"
+                >
+                  {summaryLoading ? (
+                    <Loader2 className="w-3 h-3 animate-spin" />
+                  ) : (
+                    <FileText className="w-3 h-3" />
+                  )}
+                  {summaryLoading ? 'Đang tóm tắt...' : '📝 Tóm tắt chương'}
+                </button>
                 {previousContent !== null && (
                   <button onClick={handleUndo} className="px-2.5 py-1 border border-amber-900/50 bg-amber-950/20 hover:bg-amber-950/50 text-amber-300 rounded-lg text-[10px] font-bold transition-all flex items-center gap-1">
                     <Undo className="w-3 h-3" /> Hoàn tác
@@ -701,6 +850,21 @@ Trả lời câu hỏi của tác giả: phân tích sâu, gợi ý thực tế,
                 )}
               </div>
             </div>
+
+            {summaryError && (
+              <div className={`flex items-center gap-1.5 text-[10px] px-3 py-1.5 rounded-lg border ${
+                summaryError.includes('✅') 
+                  ? 'text-green-400 bg-green-950/20 border-green-800/40'
+                  : 'text-red-400 bg-red-950/20 border-red-800/40'
+              }`}>
+                {summaryError.includes('✅') ? (
+                  <CheckCircle2 className="w-3.5 h-3.5 shrink-0" />
+                ) : (
+                  <AlertCircle className="w-3.5 h-3.5 shrink-0" />
+                )}
+                {summaryError}
+              </div>
+            )}
 
             <div className="flex-1 flex flex-col relative min-h-[400px]">
               <textarea 
@@ -742,11 +906,12 @@ Trả lời câu hỏi của tác giả: phân tích sâu, gợi ý thực tế,
 
             {rightTab === 'write' && (
               <div className="flex-1 overflow-y-auto p-3 space-y-3 text-sm">
+                {/* ─── Chế Độ ────────────────────────────────────────────────── */}
                 <div className="bg-neutral-900 border border-neutral-850 rounded-xl p-3 space-y-2">
                   <span className="text-[11px] font-bold text-gray-200">🎬 Chế Độ</span>
                   <div className="grid grid-cols-2 gap-1">
                     {WRITE_MODES.map(m => (
-                      <button key={m.v} onClick={() => setWriteMode(m.v)} className={`px-2 py-1.5 rounded-lg text-[10px] border transition-all ${writeMode === m.v ? 'bg-violet-900/40 border-violet-600/60 text-violet-200' : 'bg-neutral-950/60 border-neutral-800 text-gray-500 hover:border-neutral-600'}`}>
+                      <button key={m.v} onClick={() => handleSetWriteMode(m.v)} className={`px-2 py-1.5 rounded-lg text-[10px] border transition-all ${writeMode === m.v ? 'bg-violet-900/40 border-violet-600/60 text-violet-200' : 'bg-neutral-950/60 border-neutral-800 text-gray-500 hover:border-neutral-600'}`}>
                         {m.label}
                       </button>
                     ))}
@@ -754,31 +919,126 @@ Trả lời câu hỏi của tác giả: phân tích sâu, gợi ý thực tế,
                   {writeMode === 'reborn' && (
                     <div className="pt-1">
                       <label className="block text-[9px] text-gray-500 mb-1">Nhân vật trọng sinh</label>
-                      <select value={rebornCharacterId} onChange={e => setRebornCharacterId(e.target.value)} className="w-full bg-neutral-950 border border-neutral-800 rounded-lg p-1.5 text-[10px] text-gray-300 focus:outline-none focus:border-violet-600">
+                      <select 
+                        value={rebornCharacterId} 
+                        onChange={e => setRebornCharacterId(e.target.value)} 
+                        className="w-full bg-neutral-950 border border-neutral-800 rounded-lg p-1.5 text-[10px] text-gray-300 focus:outline-none focus:border-violet-600"
+                      >
                         <option value="">-- Chọn --</option>
                         {state.characters.map(c => <option key={c.id} value={c.id}>{c.name}</option>)}
                       </select>
                     </div>
                   )}
+
+                  {/* ─── UI dropdown chọn cảnh ──────────────────────────────── */}
                   {writeMode !== 'continue' && scenes.length > 0 && (
-                    <div className="space-y-1.5 pt-1">
-                      <input placeholder="Tìm cảnh..." value={sceneSearch} onChange={e => setSceneSearch(e.target.value)} className="w-full bg-neutral-950 border border-neutral-800 rounded-lg p-1.5 text-[10px] text-gray-300 focus:outline-none focus:border-violet-600" />
-                      <select onChange={e => { const idx = Number(e.target.value); if (writeMode === 'reborn') { const future = scenes.slice(idx).map(s => s.content).join('\n'); setSourceSceneText(future); } else { setSourceSceneText(scenes[idx]?.content || ''); } }} className="w-full bg-neutral-950 border border-neutral-800 rounded-lg p-1.5 text-[10px] text-gray-300 focus:outline-none focus:border-violet-600">
+                    <div className="space-y-1.5 pt-2 border-t border-neutral-800/50 mt-2">
+                      <label className="block text-[9px] text-amber-400 font-bold mb-1">
+                        {writeMode === 'rewrite' && '📝 Chọn cảnh gốc để AI viết lại'}
+                        {writeMode === 'scene' && '➡️ Chọn cảnh để AI viết tiếp'}
+                        {writeMode === 'reborn' && '🔮 Chọn mốc bắt đầu "tương lai đã biết"'}
+                      </label>
+                      <input
+                        placeholder="Tìm cảnh..."
+                        value={sceneSearch}
+                        onChange={e => setSceneSearch(e.target.value)}
+                        className="w-full bg-neutral-950 border border-neutral-800 rounded-lg p-1.5 text-[10px] text-gray-300 focus:outline-none focus:border-violet-600"
+                      />
+                      <select
+                        value={sourceSceneText ? scenes.findIndex(s => s.content === sourceSceneText) : ''}
+                        onChange={e => {
+                          if (e.target.value === '') { setSourceSceneText(''); return; }
+                          const idx = Number(e.target.value);
+                          if (writeMode === 'reborn') {
+                            const future = scenes.slice(idx).map(s => s.content).join('\n\n');
+                            setSourceSceneText(future);
+                          } else {
+                            setSourceSceneText(scenes[idx]?.content || '');
+                          }
+                        }}
+                        className="w-full bg-neutral-950 border border-neutral-800 rounded-lg p-1.5 text-[10px] text-gray-300 focus:outline-none focus:border-violet-600"
+                      >
                         <option value="">-- Chọn cảnh --</option>
-                        {filteredScenes.map((s) => { const realIdx = scenes.indexOf(s); return <option key={realIdx} value={realIdx}>{s.label}</option>; })}
+                        {filteredScenes.map((s) => {
+                          const realIdx = scenes.indexOf(s);
+                          const preview = s.content.slice(0, 60).replace(/\n/g, ' ');
+                          return (
+                            <option key={realIdx} value={realIdx}>
+                              {s.label} {preview ? `— ${preview}...` : ''}
+                            </option>
+                          );
+                        })}
                       </select>
+                      {sourceSceneText && (
+                        <div className="p-2 bg-neutral-950/80 border border-violet-900/30 rounded-lg">
+                          <p className="text-[9px] text-green-400/90 flex items-center gap-1 mb-1">
+                            <CheckCircle2 className="w-3 h-3" /> Đã chọn ({sourceSceneText.length.toLocaleString()} ký tự)
+                          </p>
+                          <p className="text-[9px] text-gray-500 leading-relaxed line-clamp-3">
+                            {sourceSceneText.slice(0, 150).replace(/\n/g, ' ')}...
+                          </p>
+                        </div>
+                      )}
                     </div>
                   )}
                   {writeMode !== 'continue' && scenes.length === 0 && (
-                    <p className="text-[10px] text-amber-500 pt-1">⚠️ Chưa có dữ liệu gốc — vào Đồng Nhân để phân tích.</p>
+                    <div className="p-2 bg-amber-950/20 border border-amber-900/30 rounded-lg text-[10px] text-amber-400">
+                      ⚠️ Chưa có dữ liệu Đồng Nhân. Vào trang <strong>Ý Tưởng</strong> để upload file gốc.
+                    </div>
                   )}
                 </div>
 
+                {/* ─── Dropdown chọn mốc sự kiện ────────────────────────────── */}
+                <div className="bg-neutral-900 border border-neutral-850 rounded-xl p-3 space-y-2">
+                  <label className="block text-[11px] font-bold text-amber-400 flex items-center gap-1.5">
+                    🎯 Chọn mốc từ Dòng Thời Gian (tuỳ chọn)
+                  </label>
+                  <select
+                    value={selectedEventId}
+                    onChange={e => {
+                      const eventId = e.target.value;
+                      setSelectedEventId(eventId);
+                      if (!eventId) return;
+
+                      const ev = (state.storyEvents || []).find(se => se.id === eventId);
+                      if (!ev) return;
+
+                      let actionLabel = 'Viết tiếp dựa trên bối cảnh sự kiện';
+                      if (writeMode === 'rewrite') actionLabel = 'Viết lại chi tiết sự kiện';
+                      else if (writeMode === 'scene') actionLabel = 'Viết tiếp ngay sau sự kiện';
+                      else if (writeMode === 'reborn') actionLabel = 'Lấy làm mốc ký ức trọng sinh cho sự kiện';
+
+                      const directive = `[${actionLabel}: "${ev.title}"]\n${ev.content}`;
+
+                      const existing = activeChapter?.prompt?.trim() || '';
+                      const merged = existing ? `${directive}\n\n${existing}` : directive;
+                      handleUpdateField('prompt', merged);
+                    }}
+                    className="w-full bg-neutral-950 border border-neutral-800 rounded-lg p-1.5 text-[10px] text-gray-300 focus:outline-none focus:border-amber-600"
+                  >
+                    <option value="">-- Chọn sự kiện --</option>
+                    {filterByCurrentPoint(state.storyEvents || [], state.config.currentStoryPoint?.order)
+                      .sort((a, b) => a.order - b.order)
+                      .map(ev => (
+                        <option key={ev.id} value={ev.id}>
+                          #{ev.order} {ev.chapterLabel ? `· ${ev.chapterLabel}` : ''} · {ev.title}
+                        </option>
+                      ))}
+                  </select>
+                  {selectedEventId && (
+                    <p className="text-[9px] text-green-400/80">
+                      ✅ Đã thêm vào Mệnh Lệnh bên dưới (không xoá nội dung bạn đã gõ).
+                    </p>
+                  )}
+                </div>
+
+                {/* ─── Dàn Ý ────────────────────────────────────────────────── */}
                 <div className="bg-neutral-900 border border-neutral-850 rounded-xl p-3 space-y-2">
                   <div className="flex items-center gap-1.5 text-[11px] font-bold text-gray-200"><FileText className="w-3.5 h-3.5 text-amber-500" /> Dàn Ý</div>
                   <textarea rows={2} placeholder="Phác thảo nội dung chương..." value={activeChapter.outline} onChange={e => handleUpdateField('outline', e.target.value)} className="w-full bg-neutral-950 border border-neutral-800 rounded-lg p-2 text-[11px] text-gray-300 focus:outline-none focus:border-amber-600 leading-relaxed resize-none" spellCheck={false} />
                 </div>
 
+                {/* ─── Mệnh Lệnh ────────────────────────────────────────────── */}
                 <div className="bg-neutral-900 border border-red-950/40 rounded-xl p-3 space-y-2">
                   <div className="flex items-center gap-1.5 text-[11px] font-bold text-red-300"><PenTool className="w-3.5 h-3.5 text-red-500" /> Mệnh Lệnh</div>
                   <p className="text-[9px] text-gray-500 leading-relaxed">AI viết theo mệnh lệnh này</p>
@@ -790,6 +1050,7 @@ Trả lời câu hỏi của tác giả: phân tích sâu, gợi ý thực tế,
                   </div>
                 </div>
 
+                {/* ─── Độ dài ────────────────────────────────────────────────── */}
                 <div className="bg-neutral-900 border border-neutral-850 rounded-xl p-3 space-y-2">
                   <div className="flex items-center justify-between"><span className="text-[11px] font-bold text-gray-200">📏 Độ dài</span><span className="text-[10px] font-mono text-violet-400 bg-violet-950/30 px-2 py-0.5 rounded">{selectedOption.label}</span></div>
                   <div className="grid grid-cols-2 gap-1">
@@ -802,6 +1063,7 @@ Trả lời câu hỏi của tác giả: phân tích sâu, gợi ý thực tế,
                   </div>
                 </div>
 
+                {/* ─── AI Engine ────────────────────────────────────────────── */}
                 <div className="bg-neutral-900 border border-neutral-850 rounded-xl p-3 space-y-2">
                   <div className="flex items-center justify-between text-[9px] border-b border-neutral-800 pb-1.5">
                     <span className="text-gray-500 font-mono">AI ENGINE</span>

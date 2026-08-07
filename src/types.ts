@@ -45,10 +45,79 @@ export interface CharacterTimelineEntry {
 }
 
 // ──────────────────────────────────────────────────────────────────────────────
+// 4.5. FASHION STYLE - THỜI TRANG NHÂN VẬT
+// ──────────────────────────────────────────────────────────────────────────────
+export interface FashionStyle {
+  id: string;
+  name: string;
+  context: string;
+  description: string;
+  colorPalette: string;
+  material: string;
+  significance: string;
+  source: 'ai' | 'manual';
+}
+
+// ──────────────────────────────────────────────────────────────────────────────
+// 4.6. ABILITY - NĂNG LỰC/KỸ NĂNG
+// ──────────────────────────────────────────────────────────────────────────────
+export interface Ability {
+  id: string;
+  name: string;
+  type: string;
+  description: string;
+  condition: string;
+  origin: string;
+  tier: string;
+}
+
+// ──────────────────────────────────────────────────────────────────────────────
+// 4.7. SPECIES TRAITS - ĐẶC ĐIỂM CHỦNG LOÀI
+// ──────────────────────────────────────────────────────────────────────────────
+export interface SpeciesAbility {
+  name: string;
+  description: string;
+  trigger: string;
+}
+
+export interface SpeciesTraits {
+  appearance: string;
+  size: string;
+  distinguishing: string;
+  behavior: string;
+  temperament: string;
+  intelligence: string;
+  abilities: SpeciesAbility[];
+  habitat: string;
+  diet: string;
+  weakness: string;
+  drops: string;
+  threatLevel: string;
+  rarity: string;
+}
+
+// ──────────────────────────────────────────────────────────────────────────────
+// 4.8. SEXUAL LEXICON - BỘ TỪ VỰNG MIÊU TẢ
+// ──────────────────────────────────────────────────────────────────────────────
+export interface SexualLexicon {
+  maleParts: string[];
+  femaleParts: string[];
+  actions: string[];
+  dominantActions: string[];
+  states: string[];
+  otherStates: string[];
+  moanSounds: string[];
+  sexSounds: string[];
+  sexExpressions: string[];
+  sexFluids: string[];
+}
+
+// ──────────────────────────────────────────────────────────────────────────────
 // 5. SỰ KIỆN CỐT TRUYỆN TOÀN CỤC (StoryEvent)
 // ──────────────────────────────────────────────────────────────────────────────
 export interface StoryEvent {
   id: string;
+  chapterId?: string;
   order: number;
   chapterLabel: string;
   title: string;
@@ -57,7 +126,7 @@ export interface StoryEvent {
 }
 
 // ──────────────────────────────────────────────────────────────────────────────
-// 6. NHÂN VẬT (Character) - CẬP NHẬT
+// 6. NHÂN VẬT (Character)
 // ──────────────────────────────────────────────────────────────────────────────
 export interface Character {
   id: string;
@@ -74,16 +143,14 @@ export interface Character {
   images: CharacterImage[];
   timeline?: CharacterTimelineEntry[];
   firstAppearanceOrder?: number;
-  
-  // 👈 MỚI: Lưu câu thoại gốc từ truyện
   originalQuotes?: string[];
-  
-  // 👈 MỚI: Đánh dấu nguồn thông tin
   source?: 'ai' | 'manual' | 'original' | 'merged';
+  fashionStyles?: FashionStyle[];
+  abilities?: Ability[];
 }
 
 // ──────────────────────────────────────────────────────────────────────────────
-// 7. THỰC THỂ THẾ GIỚI (WorldEntity) - CẬP NHẬT
+// 7. THỰC THỂ THẾ GIỚI (WorldEntity)
 // ──────────────────────────────────────────────────────────────────────────────
 export interface WorldEntity {
   id: string;
@@ -91,12 +158,9 @@ export interface WorldEntity {
   type: string;
   description: string;
   firstAppearanceOrder?: number;
-  
-  // 👈 MỚI: Lưu thông tin bổ sung (thành viên, xung đột, quy tắc...)
   additionalInfo?: string;
-  
-  // 👈 MỚI: Dòng thời gian của thế lực
   timeline?: CharacterTimelineEntry[];
+  speciesTraits?: SpeciesTraits;
 }
 
 // ──────────────────────────────────────────────────────────────────────────────
@@ -119,6 +183,10 @@ export interface NovelConfig {
     order: number;
     label: string;
   };
+  writeMode?: 'continue' | 'rewrite' | 'scene' | 'reborn';
+  sourceSceneText?: string;
+  rebornCharacterId?: string;
+  selectedEventId?: string;
 }
 
 // ──────────────────────────────────────────────────────────────────────────────
@@ -132,7 +200,7 @@ export interface LoreEntry {
 }
 
 // ──────────────────────────────────────────────────────────────────────────────
-// 10. RÀNG BUỘC CỨNG (HardRules)
+// 10. RÀNG BUỘC CỨNG (HardRules) - CẬP NHẬT
 // ──────────────────────────────────────────────────────────────────────────────
 export interface HardRules {
   noSelfEnding: boolean;
@@ -152,6 +220,10 @@ export interface HardRules {
   noFutureCharacters: boolean;
   noSelfAddPlot: boolean;
   noDangerousTone: boolean;
+  // 👈 MỚI: 3 rule cho Page4Rules
+  noAddScene: boolean;
+  noSkipNoAvoid: boolean;
+  requireDetailedSexScene: boolean;
 }
 
 // ──────────────────────────────────────────────────────────────────────────────
@@ -164,6 +236,7 @@ export interface WritingRules {
   consistencyRules: string;
   hardRules: HardRules;
   loreEntries: LoreEntry[];
+  sexualLexicon?: SexualLexicon;
 }
 
 // ──────────────────────────────────────────────────────────────────────────────
@@ -192,7 +265,7 @@ export interface NovelState {
 }
 
 // ──────────────────────────────────────────────────────────────────────────────
-// 14. DEFAULT STATE
+// 14. DEFAULT STATE - CẬP NHẬT
 // ──────────────────────────────────────────────────────────────────────────────
 export const defaultNovelState: NovelState = {
   config: {
@@ -208,6 +281,10 @@ export const defaultNovelState: NovelState = {
     referenceFileName: '',
     originalNarrativeVoice: '',
     targetPOVMode: 'giu_nguyen',
+    writeMode: 'continue',
+    sourceSceneText: '',
+    rebornCharacterId: '',
+    selectedEventId: '',
   },
   characters: [],
   worldEntities: [],
@@ -234,8 +311,13 @@ export const defaultNovelState: NovelState = {
       noFutureCharacters: false,
       noSelfAddPlot: false,
       noDangerousTone: false,
+      // 👈 MỚI: 3 rule mới
+      noAddScene: false,
+      noSkipNoAvoid: false,
+      requireDetailedSexScene: false,
     },
     loreEntries: [],
+    sexualLexicon: undefined,
   },
   chapters: [],
   currentChapterId: null,
@@ -305,7 +387,7 @@ export function validateProjectQuality(state: NovelState): {
 }
 
 // ──────────────────────────────────────────────────────────────────────────────
-// 18. HELPER: Lấy danh sách rule đang bật
+// 18. HELPER: Lấy danh sách rule đang bật - CẬP NHẬT
 // ──────────────────────────────────────────────────────────────────────────────
 export function getActiveRules(hardRules: HardRules): string[] {
   const active: string[] = [];
@@ -327,6 +409,10 @@ export function getActiveRules(hardRules: HardRules): string[] {
     noFutureCharacters: 'Cấm nhắc nhân vật chưa xuất hiện',
     noSelfAddPlot: 'Cấm tự thêm tình tiết mới',
     noDangerousTone: 'Cấm câu từ đe dọa, xáo rỗng',
+    // 👈 MỚI: 3 rule mới
+    noAddScene: 'Cấm tự thêm cảnh mới',
+    noSkipNoAvoid: 'Cấm lảng tránh, né tránh cảnh H',
+    requireDetailedSexScene: 'Bắt buộc viết chi tiết cảnh H',
   };
   
   Object.entries(hardRules).forEach(([key, value]) => {

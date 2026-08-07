@@ -5,6 +5,7 @@ import {
   FolderOpen, Trash2, Plus, BookMarked
 } from 'lucide-react';
 import { NovelState } from './types';
+import { DEFAULT_HARD_RULES } from './components/Page4Rules';
 import Page1Start from './components/Page1Start';
 import Page2Idea from './components/Page2Idea';
 import Page3Characters from './components/Page3Characters';
@@ -108,9 +109,11 @@ const makeInitialState = (title = ''): NovelState => ({
       noRepeatContent: true, noMetaComments: true, noOOCPersonality: true,
       noModernSlangInAncient: true, noAncientToneInModern: false,
       noAbruptResolution: true, noSummaryMode: true, noExcessiveEllipsis: true,
-      noFutureCharacters: true, noSelfAddPlot: true, noDangerousTone: false,
+      noFutureCharacters: true, noSelfAddPlot: true, noDangerousTone: true,
+      noAddScene: true, noSkipNoAvoid: true, requireDetailedSexScene: true,
     },
     loreEntries: [],
+    sexualLexicon: undefined,
   },
   chapters: [],
   currentChapterId: '',
@@ -472,6 +475,10 @@ export default function App() {
     if (oldData && list.length === 0) {
       try {
         const parsed = JSON.parse(oldData) as NovelState;
+        // Merge hardRules với default
+        if (parsed.rules?.hardRules) {
+          parsed.rules.hardRules = { ...DEFAULT_HARD_RULES, ...parsed.rules.hardRules };
+        }
         const newId = genId();
         saveProject(newId, parsed);
         setActiveProjectId(newId);
@@ -484,7 +491,15 @@ export default function App() {
 
     if (activeId && list.find(p => p.id === activeId)) {
       const data = loadProject(activeId);
-      if (data) { setProjectId(activeId); setState(data); return; }
+      if (data) {
+        // 👈 SỬA: Merge hardRules với default để thêm key mới
+        if (data.rules?.hardRules) {
+          data.rules.hardRules = { ...DEFAULT_HARD_RULES, ...data.rules.hardRules };
+        }
+        setProjectId(activeId);
+        setState(data);
+        return;
+      }
     }
 
     // Nếu có dự án, mở dự án mới nhất
@@ -492,6 +507,10 @@ export default function App() {
       const newest = list.sort((a, b) => b.updatedAt - a.updatedAt)[0];
       const data = loadProject(newest.id);
       if (data) {
+        // 👈 SỬA: Merge hardRules với default
+        if (data.rules?.hardRules) {
+          data.rules.hardRules = { ...DEFAULT_HARD_RULES, ...data.rules.hardRules };
+        }
         setProjectId(newest.id);
         setActiveProjectId(newest.id);
         setState(data);
@@ -567,6 +586,10 @@ export default function App() {
     if (state && projectId) saveProject(projectId, state);
     const data = loadProject(id);
     if (data) {
+      // Merge hardRules với default
+      if (data.rules?.hardRules) {
+        data.rules.hardRules = { ...DEFAULT_HARD_RULES, ...data.rules.hardRules };
+      }
       setProjectId(id);
       setActiveProjectId(id);
       setState(data);
@@ -588,6 +611,9 @@ export default function App() {
       const newest = remaining.sort((a, b) => b.updatedAt - a.updatedAt)[0];
       const data = loadProject(newest.id);
       if (data) {
+        if (data.rules?.hardRules) {
+          data.rules.hardRules = { ...DEFAULT_HARD_RULES, ...data.rules.hardRules };
+        }
         setProjectId(newest.id);
         setActiveProjectId(newest.id);
         setState(data);
@@ -614,6 +640,10 @@ export default function App() {
     if (state && projectId) createBackup(projectId, state, 'manual', `Trước khi khôi phục — ${new Date().toLocaleString('vi-VN')}`);
     const restored = restoreBackup(id);
     if (restored && projectId) {
+      // Merge hardRules với default
+      if (restored.rules?.hardRules) {
+        restored.rules.hardRules = { ...DEFAULT_HARD_RULES, ...restored.rules.hardRules };
+      }
       setState(restored);
       saveProject(projectId, restored);
       setShowBackup(false);

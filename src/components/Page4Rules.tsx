@@ -1,6 +1,11 @@
 import React, { useState } from 'react';
-import { ShieldCheck, Scale, AlertOctagon, RefreshCw, BookmarkCheck, Lock, ChevronDown, ChevronUp, Info, Library, Plus, Trash2, Edit2, Check, X, Sparkles } from 'lucide-react';
-import { NovelState, HardRules, LoreEntry } from '../types';
+import { 
+  ShieldCheck, Scale, AlertOctagon, RefreshCw, BookmarkCheck, 
+  Lock, ChevronDown, ChevronUp, Info, Library, Plus, Trash2, 
+  Edit2, Check, X, Sparkles, Eye,
+  CheckCircle2, AlertCircle
+} from 'lucide-react';
+import { NovelState, HardRules, LoreEntry, SexualLexicon } from '../types';
 
 interface Page4RulesProps {
   state: NovelState;
@@ -8,7 +13,11 @@ interface Page4RulesProps {
   onNavigate: (tabId: string) => void;
 }
 
-// ─── Default hard rules (tất cả bật sẵn) ─────────────────────────────────────
+// ─── MARKER CHO REMOVE GUIDE ──────────────────────────────────────────────
+const GUIDE_START_MARKER = '<<<REFERENCE_GUIDE_START>>>';
+const GUIDE_END_MARKER = '<<<REFERENCE_GUIDE_END>>>';
+
+// ─── Default hard rules ─────────────────────────────────────────────────────
 export const DEFAULT_HARD_RULES: HardRules = {
   noSelfEnding:           true,
   noNewCharacters:        true,
@@ -24,10 +33,113 @@ export const DEFAULT_HARD_RULES: HardRules = {
   noAbruptResolution:     true,
   noSummaryMode:          true,
   noExcessiveEllipsis:    true,
-  noFutureCharacters:     true, // 👈 MỚI
-  noSelfAddPlot:          true, // 👈 MỚI
-  noDangerousTone:        true, // 👈 MỚI
+  noFutureCharacters:     true,
+  noSelfAddPlot:          true,
+  noDangerousTone:        true,
+  noAddScene:             true,  // 👈 MỚI
+  noSkipNoAvoid:          true,  // 👈 MỚI
+  requireDetailedSexScene: true, // 👈 MỚI
 };
+
+// ─── DEFAULT LEXICON ────────────────────────────────────────────────────────
+export const DEFAULT_LEXICON: Required<SexualLexicon> = {
+  // Bộ phận cơ thể
+  maleParts: [
+    'dương vật', 'tinh hoàn', 'đầu khấc', 'côn thịt', 'lỗ tiểu', 'lông mao',
+  ],
+  femaleParts: [
+    'núm vú', 'nhủ hoa', 'bầu vú', 'bầu ngực', 'âm đạo', 'âm vật',
+    'lông mu', 'hậu môn', 'quầng núm vú', 'mông', 'háng', 'bẹn',
+    'môi âm đạo', 'mép âm đạo',
+  ],
+  // Hành động - 👈 ĐÃ SỬA: thêm chú thích cho "cưỡi"
+  actions: [
+    'thao', 'dập', 'nhấp', 'phang',
+    'cưỡi (tùy tình huống: nữ ở trên, chủ động di chuyển; nếu nam ở trên thì dùng đè/ấn/úp sấp)',
+  ],
+  // 👈 ĐÃ SỬA: dominantActions có chú thích rõ tư thế
+  dominantActions: [
+    'bế lên',
+    'bế mặt đối mặt',
+    'bế ngửa banh 2 chân nữ thành chữ V - chữ M',
+    'bế ngửa lên dùng tay móc ra sau ót cửa nữ và dập - thao mạnh vào',
+    'đè (nam trên, ép xuống)',
+    'ấn (nam trên, đẩy mạnh)',
+    'úp sấp (nam trên, từ phía sau)',
+    'cưỡi (nữ trên, chủ động nhún/dập — dùng khi nữ nằm/ngồi trên nam)',
+  ],
+  // Trạng thái
+  states: [
+    'to căng', 'căng vễnh', 'to bự', 'căng phồng', 'ướt đẫm', 'bê bết',
+    'ước đẫm', 'ướt át', 'sưng húp', 'sưng tấy', 'sưng đỏ', 'căng mộng',
+    'nhoe nhoét', 'căng tràng', 'tung tóe',
+  ],
+  otherStates: [
+    'tung tóe', 'bê bếch', 'bắn thành thia', 'bắn thành dòng', 'chảy thành dòng',
+  ],
+  // Tiếng rên & âm thanh
+  moanSounds: [
+    // Từ đơn (bắt buộc dùng)
+    'a', 'ứ', 'ôi', 'ối', 'ahh', 'umm',
+    // Mẫu nhịp điệu (tham khảo, KHÔNG copy nguyên)
+    'đừng... đừng mà... to quá... ahh...',
+    'ôi... chết... chết mất... to.. to quá...',
+    'ôi không không... to quá... tét... nó tét ra mất...',
+    'ối... nó vào trong rồi... ahh không không nó sâu quá...',
+    'xuất rồi... ra rồi......',
+  ],
+  sexSounds: [
+    'loẹt loẹt loẹt', 'chụt chụt chụt', 'umm umm', 'ọt ọt ọt',
+    'phạch phạch phạch', 'bạch bạch bạch bạch',
+    'ọt ọt ọt', 'hức.. hức ... hức',
+  ],
+  sexExpressions: [
+    'trợn mắt', 'lè lưỡi', 'há miệng lè lưỡi', 'há miệng thở không ra hơi',
+    'chảy nước dãi', 'co giật', 'run rẩy', 'nằm co giật', 'run co giật',
+    '2 tay banh 2 chân ra co giật âm đạo', 'âm đạo trào tinh trùng', 'khụy chân',
+    '2 chân cọ vào nhau', 'khụy 2 chân cọ sát',
+  ],
+  sexFluids: [
+    'tinh trùng', 'dâm thủy', 'nước tiểu',
+  ],
+};
+
+// ─── buildLexiconPrompt ──────────────────────────────────────────────────────
+export function buildLexiconPrompt(lexicon: SexualLexicon | undefined): string {
+  const l = lexicon ?? DEFAULT_LEXICON;
+  
+  const moanBlock = `💬 TIẾNG RÊN & CÂU THOẠI KHI H (biến tấu theo ngữ cảnh):
+- Tiếng rên đơn (bắt buộc dùng, xen kẽ vào câu): ${l.moanSounds.slice(0, 6).join(', ')}.
+- Mẫu nhịp điệu tham khảo (KHÔNG COPY NGUYÊN, chỉ tham khảo để tự sáng tác):
+  • ${l.moanSounds.slice(6).join('\n  • ')}
+- AI kết hợp các yếu tố trên với hành động, lặp đi lặp lại nhiều lần trong cảnh H để tăng độ dài và chân thật.
+- Dùng "......" để miêu tả tiếng rên bị ngắt quãng, kéo dài câu rên.
+- ⚠️ CẤM lặp cùng 1 âm tiết rên (a, ứ, ôi) quá 3 lần liên tiếp không có nội dung xen kẽ.
+
+🔊 ÂM THANH:
+- Hôn / bú liếm: ${l.sexSounds.slice(0, 4).join(', ')}.
+- Da thịt đập vào nhau / dương vật ra vào: ${l.sexSounds.slice(4, 6).join(', ')}.
+- Bú liếm / ọc: ${l.sexSounds.slice(6).join(', ')}.
+
+🎭 BIỂU CẢM CƠ THỂ KHI H:
+${l.sexExpressions.join(', ')}.
+
+💦 DỊCH:
+${l.sexFluids.join(', ')}.`;
+
+  return `🔞 BỘ TỪ VỰNG MIÊU TẢ TRỰC TIẾP (bắt buộc tuân thủ, không dùng ẩn dụ thay thế):
+
+👉 Bộ phận nam: ${l.maleParts.join(', ')}.
+👉 Bộ phận nữ: ${l.femaleParts.join(', ')}.
+👉 Hành động quan hệ: ${l.actions.join(', ')}.
+👉 Hành động thể hiện sự mạnh mẽ / đàn áp: ${l.dominantActions.join(', ')}.
+👉 Trạng thái - hình thái bộ phận: ${l.states.join(', ')}.
+👉 Trạng thái khác (xuất tinh, chảy...): ${l.otherStates.join(', ')}.
+
+${moanBlock}
+
+QUY TẮC: Dùng ĐÚNG các từ trên. Cấm thay bằng ẩn dụ như "khe suối", "đóa hoa", "vùng cấm địa".`;
+}
 
 // ─── Định nghĩa từng rule ───────────────────────────────────────────────────
 interface RuleDef {
@@ -73,7 +185,6 @@ const RULE_DEFS: RuleDef[] = [
     desc: 'AI rút gọn cảnh quan trọng thành 2-3 câu tóm tắt thay vì diễn giải chi tiết.',
     aiPrompt: 'KHÔNG tóm tắt cảnh quan trọng bằng vài câu gọn. Mọi cảnh phải được viết đầy đủ: đối thoại, hành động, nội tâm, không gian — chi tiết và sống động.',
   },
-  // ── MỚI: Rule cấm tự thêm tình tiết ──
   {
     key: 'noSelfAddPlot',
     group: 'Cấu trúc cảnh',
@@ -81,6 +192,15 @@ const RULE_DEFS: RuleDef[] = [
     label: 'Cấm tự thêm tình tiết mới',
     desc: 'AI tự sáng tạo thêm biến cố, twist, hoặc tình huống ngoài mệnh lệnh tác giả.',
     aiPrompt: '🚨 CHỈ viết đúng những gì mệnh lệnh tác giả yêu cầu. KHÔNG tự thêm biến cố mới, twist bất ngờ, tình tiết phụ, hay bất kỳ yếu tố nào không được đề cập trong mệnh lệnh. Sáng tạo trong phạm vi mệnh lệnh, không mở rộng cốt truyện tự ý.',
+  },
+  // 👈 MỚI: Cấm tự thêm cảnh mới
+  {
+    key: 'noAddScene',
+    group: 'Cấu trúc cảnh',
+    severity: 'high',
+    label: 'Cấm tự thêm cảnh mới',
+    desc: 'AI hay tự mở cảnh mới (chuyển sang phòng khác, gặp người khác, rời khỏi vị trí hiện tại) khi chưa được yêu cầu.',
+    aiPrompt: 'TUYỆT ĐỐI KHÔNG tự chuyển cảnh, không mở khung cảnh mới, không đưa nhân vật di chuyển sang địa điểm khác nếu mệnh lệnh không yêu cầu. Giữ nguyên không gian và bối cảnh hiện tại.',
   },
 
   // ── Nhóm: Nhân vật ──
@@ -98,7 +218,7 @@ const RULE_DEFS: RuleDef[] = [
     severity: 'high',
     label: 'Cấm nhân vật hành động trái tính cách (OOC)',
     desc: 'Nhân vật lạnh lùng đột nhiên nói chuyện ngọt ngào, phản diện bỗng dưng tốt bụng — phá vỡ logic.',
-    aiPrompt: 'Giữ nguyên 100% tính cách, phản ứng, giọng điệu từng nhân vật đúng như đã thiết lập. Nhân vật lạnh lùng không tự nhiên mềm mỏng, kẻ kiêu ngạo không tự nhiên khiêm tốn. Mọi thay đổi tính cách phải có nguyên nhân rõ ràng từ mệnh lệnh tác giả.',
+    aiPrompt: 'Giữ nguyên 100% tính cách, phản ứng, giọng điệu từng nhân vật đúng như đã thiết lập. Nhân vật lạnh lùng không tự nhiên mềm mỏng, kẻ kiêu ngạo không tự nhiên khiêm tốn. Mọi thay đổi tính cách phải có nguyên nhân rõ ràng từ mệnh lệnh tác giả. Đặc biệt trong cảnh H: giữ nguyên tính cách — nhân vật lạnh lùng vẫn lạnh/khắc nghiệt ngay cả khi rên, không biến thành tsundere điệu đà.',
   },
   {
     key: 'noUnmentionedRefs',
@@ -108,7 +228,6 @@ const RULE_DEFS: RuleDef[] = [
     desc: 'AI kéo nhân vật chương trước vào cảnh hiện tại dù không liên quan, gây loãng tiêu điểm.',
     aiPrompt: 'KHÔNG tự ý nhắc đến nhân vật, sự việc, địa điểm không được đề cập trong mệnh lệnh hiện tại. Nếu mệnh lệnh chỉ nói về 2 nhân vật, không kéo thêm nhân vật khác vào dù họ đã xuất hiện ở chương trước.',
   },
-  // ── MỚI: Rule cấm nhắc nhân vật chưa xuất hiện ──
   {
     key: 'noFutureCharacters',
     group: 'Nhân vật',
@@ -149,7 +268,7 @@ const RULE_DEFS: RuleDef[] = [
     severity: 'medium',
     label: 'Cấm dùng "..." thay thế nội dung quan trọng',
     desc: 'AI dùng dấu "..." để né tránh viết cảnh nhạy cảm, đối thoại khó, hoặc hành động phức tạp.',
-    aiPrompt: 'KHÔNG dùng "..." hoặc "[...]" để bỏ qua, ẩn đi, hay gợi ý nội dung quan trọng. Mọi cảnh, đối thoại, hành động cần phải được viết đầy đủ và rõ ràng.',
+    aiPrompt: 'KHÔNG dùng "..." hoặc "[...]" để bỏ qua, ẩn đi, hay gợi ý nội dung quan trọng. Mọi cảnh, đối thoại, hành động cần phải được viết đầy đủ và rõ ràng. Tuy nhiên, "..." được PHÉP dùng trong thoại rên, ngắt quãng giọng nói để thể hiện nhịp thở gấp gáp — nhưng KHÔNG được dùng để thay thế miêu tả cảnh / bỏ qua hành động.',
   },
   {
     key: 'noMetaComments',
@@ -159,7 +278,6 @@ const RULE_DEFS: RuleDef[] = [
     desc: 'AI hay thêm "[Tiếp theo]", "Được rồi, tôi sẽ viết...", "Lưu ý:", hoặc dùng **bold**, # header.',
     aiPrompt: 'CHỈ TRẢ VĂN XUÔI THUẦN TÚY. TUYỆT ĐỐI KHÔNG: markdown (**, #, -, *), lời dẫn ("Được rồi...", "Đây là đoạn..."), chú thích meta ("[Hết đoạn]", "[Tiếp theo]", "Lưu ý:"), hay bất kỳ văn bản nào ngoài nội dung truyện. Bắt đầu ngay vào văn xuôi.',
   },
-  // ── MỚI: Rule cấm câu từ đe dọa ──
   {
     key: 'noDangerousTone',
     group: 'Nội dung & văn phong',
@@ -167,6 +285,26 @@ const RULE_DEFS: RuleDef[] = [
     label: 'Cấm câu từ đe dọa, xáo rỗng',
     desc: 'AI dùng câu từ mang cảm giác nguy hiểm, đe dọa bất thường, tạo không khí tiêu cực không cần thiết.',
     aiPrompt: '🚨 KHÔNG sử dụng câu từ mang cảm giác nguy hiểm, đe dọa, hoặc xáo rỗng không cần thiết. Giữ giọng văn ổn định, không gây hoang mang cho người đọc. KHÔNG viết theo hướng đe dọa, gây cấn bất thường, hoặc tạo bầu không khí tiêu cực ngoài dự kiến.',
+  },
+
+  // ── Nhóm: Cảnh H (MỚI) ──
+  // 👈 MỚI: Cấm viết tránh / nhảy cóc cảnh H
+  {
+    key: 'noSkipNoAvoid',
+    group: 'Cảnh H',
+    severity: 'high',
+    label: 'Cấm viết tránh, nhảy cóc, tóm tắt cảnh H',
+    desc: 'AI hay né cảnh H bằng cách tóm tắt "đêm hôm đó", "một lúc lâu sau", hoặc nhảy sang sáng hôm sau.',
+    aiPrompt: '🚨 TUYỆT ĐỐI KHÔNG viết giảm, viết tránh, tóm tắt, hoặc nhảy cóc qua cảnh quan hệ tình dục. Phải viết đầy đủ từng chi tiết: bộ phận sinh dục, hành động, cảm giác, tiếng rên, âm thanh, biểu cảm. Cấm dùng "sau đó", "đêm hôm đó", "một lúc lâu sau", "sáng hôm sau" để bỏ qua cảnh H. Viết liên tục, từng giây từng phút của cuộc giao hợp.',
+  },
+  // 👈 MỚI: Bắt buộc viết chi tiết cảnh H
+  {
+    key: 'requireDetailedSexScene',
+    group: 'Cảnh H',
+    severity: 'high',
+    label: 'Bắt buộc viết chi tiết cảnh H',
+    desc: 'Yêu cầu AI phải viết cảnh H chi tiết, không được tóm tắt hoặc né tránh.',
+    aiPrompt: '🚨 BẮT BUỘC viết cảnh quan hệ tình dục chi tiết, đầy đủ, sống động khi mệnh lệnh yêu cầu. Phải bao gồm: miêu tả bộ phận sinh dục (dùng đúng từ trong bộ từ vựng), hành động cụ thể (thao/dập/nhấp/ra vào), cảm xúc và khoái cảm, tiếng rên và âm thanh (loẹt loẹt, phạch phạch), biểu cảm cơ thể (co giật, run rẩy, trợn mắt, há miệng), dịch (tinh trùng, dâm thủy). Không được viết kiểu "rồi họ làm tình", "họ trao nhau khoái cảm" mà không có chi tiết cụ thể.',
   },
 
   // ── Nhóm: Xưng hô & nhất quán ──
@@ -193,6 +331,7 @@ const GROUP_COLORS: Record<string, string> = {
   'Cấu trúc cảnh':        'text-blue-400 border-blue-800/40 bg-blue-950/20',
   'Nhân vật':             'text-purple-400 border-purple-800/40 bg-purple-950/20',
   'Nội dung & văn phong': 'text-amber-400 border-amber-800/40 bg-amber-950/20',
+  'Cảnh H':               'text-pink-400 border-pink-800/40 bg-pink-950/20', // 👈 MỚI
   'Xưng hô & nhất quán':  'text-emerald-400 border-emerald-800/40 bg-emerald-950/20',
 };
 
@@ -273,6 +412,96 @@ const LORE_CATEGORIES = [
   '📝 Ghi chú tác giả',
   '🔧 Khác',
 ];
+
+// ─── PRESET GUIDELINES ──────────────────────────────────────────────────────
+const REFERENCE_GUIDELINES = `📝 HƯỚNG DẪN THAM KHẢO - LINH HOẠT, KHÔNG RẬP KHUÔN:
+
+🏞️ MÔI TRƯỜNG & KHÔNG GIAN:
+- Miêu tả không gian, thời tiết, ánh sáng, âm thanh, mùi hương
+- Tạo bầu không khí phù hợp với cảnh (lãng mạn, căng thẳng, u tối, ấm cúng...)
+- Không cần miêu tả quá dài dòng, chỉ cần đủ để người đọc hình dung
+
+🧍 CƠ THỂ & CẢM XÚC:
+- Vóc dáng, làn da, khuôn mặt, đôi mắt, mái tóc
+- Cảm xúc: vui, buồn, tức, sợ, bối rối, phấn khích, xấu hổ...
+- Biểu cảm: nhíu mày, mỉm cười, đỏ mặt, ánh mắt lấp lánh, run rẩy...
+- Linh hoạt, không miêu tả cứng nhắc mọi lúc
+
+👘 Y PHỤC & PHỤ KIỆN:
+- Trang phục, nội y, trang sức, phụ kiện
+- Màu sắc, chất liệu, kiểu dáng khi có ý nghĩa đặc biệt
+- Không cần liệt kê chi tiết từng bộ phận trang phục
+
+💬 LỜI THOẠI:
+- Phù hợp ngữ cảnh: căng thẳng, vui vẻ, bi thương, gấp gáp...
+- Ngữ điệu: gấp gáp, nghẹn ngào, thì thầm, dứt khoát, mỉa mai...
+- Dùng câu ngắn khi cao trào, câu dài khi trữ tình
+
+🧠 NỘI TÂM:
+- Suy nghĩ, trăn trở, ký ức, mâu thuẫn nội tâm
+- Xen kẽ tự nhiên với hành động và đối thoại
+
+🎭 BIỂU LỘ CẢM XÚC:
+- Cam chịu: cắn môi, nắm tay, mắt nhìn xuống
+- Sa ngã: mất phương hướng, tuyệt vọng, buông xuôi
+- Chịu đựng: cố nén, lặng im, gồng mình
+- Chấp nhận: thở dài, gật đầu, mỉm cười miễn cưỡng
+- Hưng phấn: mắt sáng rực, nụ cười rạng rỡ
+- Kìm nén: siết chặt tay, cổ họng nghẹn lại
+
+🖐️ CỬ CHỈ & HÀNH ĐỘNG:
+- Cử chỉ, tư thế, động tác cơ thể
+- Phù hợp với tình huống và tính cách nhân vật
+- Tự nhiên, không cường điệu hóa
+
+💞 TƯƠNG TÁC & QUAN HỆ THÂN MẬT:
+- Diễn tả cảm xúc, ham muốn, rung động khi gần gũi
+- Khoảnh khắc chạm mắt, chạm tay, hơi thở gấp gáp
+- Ngôn ngữ cơ thể: đôi tay vuốt ve, ánh mắt giao nhau, hơi thở hòa quyện
+- Cảm giác ngại ngùng, bồi hồi, khao khát, say mê
+- Khoái cảm dâng trào, mê đắm, cuồng nhiệt
+- Sau đó: dịu dàng, ấm áp, thỏa mãn, hoặc tiếc nuối, cô đơn
+
+📏 YÊU CẦU TỐI THIỂU (bắt buộc, không phải tùy chọn):
+- Mỗi lần một nhân vật xuất hiện hoặc có hành động đáng chú ý: PHẢI có tối thiểu 1-2 câu
+  miêu tả ngoại hình/biểu cảm/cử chỉ liên quan đến khoảnh khắc đó — không bỏ qua.
+- Các đoạn hành động (chiến đấu, di chuyển, phản ứng nhanh...): PHẢI chia thành nhiều bước
+  nhỏ, mô tả rõ trình tự cơ thể chuyển động, không gộp thành 1-2 câu tóm lược.
+- Khi 2 nhân vật tương tác (đối thoại, xung đột, thân mật...): PHẢI thể hiện qua ít nhất
+  3 yếu tố cụ thể trong số: ánh mắt, khoảng cách cơ thể, giọng nói/ngữ điệu, cử chỉ tay,
+  nhịp thở, phản ứng nội tâm — không viết chung chung kiểu "họ nhìn nhau và mỉm cười".
+
+🌸 MIÊU TẢ CẢNH H (TRỰC TIẾP, KHÔNG ẨN DỤ):
+- Gọi đúng tên bộ phận theo bộ từ vựng đã cài đặt ở bên dưới.
+- Miêu tả cụ thể: màu sắc, hình dáng, chuyển động, cảm giác da thịt.
+- CẤM ẩn dụ sáo rỗng: "khe suối", "đóa hoa xuân", "vùng cấm địa", "nơi thầm kín".
+- Viết nhiều, đẩy đủ, tả rõ bộ phận sinh dục, tả rõ cảnh quan hệ tình dục.
+
+📌 LƯU Ý: Đây là HƯỚNG DẪN THAM KHẢO, không phải quy tắc cứng nhắc. AI có thể LINH HOẠT SÁNG TẠO để tránh rập khuôn, giữ văn phong tự nhiên, hấp dẫn và phù hợp với từng cảnh cụ thể.`;
+
+const FORBIDDEN_GUIDELINES = `🚫 DANH SÁCH CẤM KỴ BỔ SUNG:
+
+⚠️ KHÔNG KHÍ & GIỌNG VĂN:
+- Tuyệt đối KHÔNG tự thêm các câu từ tạo cảm giác nguy hiểm, đe dọa, "điềm báo xấu sắp xảy ra"
+  (VD: "một cảm giác bất an len lỏi...", "như có gì đó sắp ập tới...", "bóng tối đang chờ đợi...")
+  nếu mệnh lệnh không yêu cầu.
+- KHÔNG tự ý đẩy bầu không khí ở cuối đoạn/cuối lần viết trở nên nặng nề, u ám, trầm buồn,
+  lắng đọng mang tính "khép lại cảm xúc" nếu không được yêu cầu. Giữ tông cảm xúc trung tính,
+  đúng với diễn biến đang có, không tự thêm dư vị buồn/nặng ở câu cuối.
+
+🛑 KẾT THÚC & CẤU TRÚC:
+- Tuyệt đối KHÔNG tự viết đoạn kết, đoạn chốt, đoạn "khép cảnh" nếu mệnh lệnh không yêu cầu
+  viết kết thúc. Dừng đúng tại điểm mệnh lệnh yêu cầu, không tự đẩy câu chuyện đến hồi kết.
+- KHÔNG tự suy diễn hoặc viết thêm hậu quả/diễn biến tiếp theo ngoài phạm vi mệnh lệnh.
+
+🔇 TIẾNG RÊN & ÂM THANH:
+- CẤM lặp cùng 1 âm tiết rên (a, ứ, ôi) quá 3 lần liên tiếp không có nội dung xen kẽ.
+- Phải xen kẽ: hành động -> rên -> hành động -> rên.
+- KHÔNG copy nguyên mẫu câu rên từ bộ từ vựng — chỉ tham khảo nhịp điệu, tự sáng tác.
+
+💡 LƯU Ý: Danh sách này bổ sung cho các Ràng Buộc Cứng AI ở trên, tập trung vào các lỗi
+thực tế đã ghi nhận khi AI viết: tự thêm điềm báo nguy hiểm, tự kết thúc cảnh, tự làm
+không khí nặng nề cuối đoạn, lặp rên nhàm chán.`;
 
 // ─── LoreSection Component ────────────────────────────────────────────────────
 function LoreSection({
@@ -515,13 +744,147 @@ function LoreSection({
   );
 }
 
+// ─── Component: LexiconEditor ──────────────────────────────────────────────
+function LexiconEditor({
+  state,
+  updateState,
+}: {
+  state: NovelState;
+  updateState: (updater: (prev: NovelState) => void) => void;
+}) {
+  const [expanded, setExpanded] = useState(false);
+  const lexicon = state.rules.sexualLexicon ?? DEFAULT_LEXICON;
+
+  const updateLexicon = (patch: Partial<SexualLexicon>) => {
+    updateState((prev) => {
+      prev.rules.sexualLexicon = { ...DEFAULT_LEXICON, ...prev.rules.sexualLexicon, ...patch };
+    });
+  };
+
+  const parseLines = (val: string) => val.split('\n').map(s => s.trim()).filter(Boolean);
+
+  const renderArea = (label: string, value: string[], onChange: (v: string[]) => void) => (
+    <div>
+      <label className="block text-[10px] text-gray-400 mb-1 font-semibold">{label}</label>
+      <textarea
+        rows={3}
+        value={value.join('\n')}
+        onChange={(e) => onChange(parseLines(e.target.value))}
+        className="w-full bg-neutral-950 border border-neutral-800 rounded-lg p-2 text-[11px] text-gray-200 focus:outline-none focus:border-pink-600 resize-y"
+        spellCheck={false}
+      />
+    </div>
+  );
+
+  return (
+    <div className="bg-gradient-to-br from-pink-950/20 via-neutral-900 to-neutral-900 border border-pink-700/30 rounded-2xl overflow-hidden">
+      <button
+        onClick={() => setExpanded(!expanded)}
+        className="w-full flex items-center justify-between px-5 py-4 hover:bg-pink-950/10 transition-colors"
+      >
+        <div className="flex items-center gap-2">
+          <Sparkles className="w-4 h-4 text-pink-400" />
+          <h3 className="text-sm font-bold text-pink-300">🔞 Bộ Từ Vựng Miêu Tả</h3>
+          <span className="text-[10px] text-gray-500">(Có thể chỉnh sửa cho từng thể loại)</span>
+        </div>
+        <div className="flex items-center gap-3">
+          <span className="text-[10px] text-gray-600">10 danh mục</span>
+          {expanded ? <ChevronUp className="w-4 h-4 text-gray-500" /> : <ChevronDown className="w-4 h-4 text-gray-500" />}
+        </div>
+      </button>
+
+      {expanded && (
+        <div className="px-5 pb-5 pt-2 border-t border-pink-900/30 space-y-4">
+          <p className="text-[10px] text-gray-500 leading-relaxed">
+            Các từ ngữ dưới đây sẽ được đưa vào prompt khi bấm "Thêm hướng dẫn chi tiết". 
+            Bạn có thể xóa, thêm, hoặc sửa từng từ để phù hợp với thể loại / bối cảnh truyện.
+          </p>
+
+          <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+            {renderArea('🍆 Bộ phận nam', lexicon.maleParts, (v) => updateLexicon({ maleParts: v }))}
+            {renderArea('🌸 Bộ phận nữ', lexicon.femaleParts, (v) => updateLexicon({ femaleParts: v }))}
+            {renderArea('⚡ Hành động quan hệ', lexicon.actions, (v) => updateLexicon({ actions: v }))}
+            {renderArea('👊 Hành động mạnh mẽ / đàn áp', lexicon.dominantActions, (v) => updateLexicon({ dominantActions: v }))}
+            {renderArea('💥 Trạng thái - hình thái', lexicon.states, (v) => updateLexicon({ states: v }))}
+            {renderArea('💧 Trạng thái khác', lexicon.otherStates, (v) => updateLexicon({ otherStates: v }))}
+            {renderArea('💬 Tiếng rên & thoại khi H', lexicon.moanSounds, (v) => updateLexicon({ moanSounds: v }))}
+            {renderArea('🔊 Âm thanh (hôn / va đập / bú)', lexicon.sexSounds, (v) => updateLexicon({ sexSounds: v }))}
+            {renderArea('🎭 Biểu cảm cơ thể khi H', lexicon.sexExpressions, (v) => updateLexicon({ sexExpressions: v }))}
+            {renderArea('💦 Dịch', lexicon.sexFluids, (v) => updateLexicon({ sexFluids: v }))}
+          </div>
+
+          <button
+            onClick={() => {
+              updateState((prev) => { prev.rules.sexualLexicon = DEFAULT_LEXICON; });
+            }}
+            className="text-[10px] text-gray-500 hover:text-pink-400 underline"
+          >
+            ↺ Khôi phục mặc định
+          </button>
+        </div>
+      )}
+    </div>
+  );
+}
+
+// ─── Component: PromptPreview ──────────────────────────────────────────────
+function PromptPreview({
+  state,
+  onClose,
+}: {
+  state: NovelState;
+  onClose: () => void;
+}) {
+  const hardRulesPrompt = buildHardRulesPrompt(state.rules.hardRules ?? DEFAULT_HARD_RULES);
+  const lexiconPrompt = buildLexiconPrompt(state.rules.sexualLexicon);
+  const mandatory = state.rules.mandatory || '';
+  const forbidden = state.rules.forbidden || '';
+
+  const fullPrompt = [
+    hardRulesPrompt && `🔒 RÀNG BUỘC CỨNG AI:\n${hardRulesPrompt}`,
+    lexiconPrompt && `📖 BỘ TỪ VỰNG:\n${lexiconPrompt}`,
+    mandatory && `📝 ĐIỀU BẮT BUỘC:\n${mandatory}`,
+    forbidden && `🚫 ĐIỀU CẤM KỴ:\n${forbidden}`,
+  ].filter(Boolean).join('\n\n---\n\n');
+
+  return (
+    <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/80 backdrop-blur-sm">
+      <div className="relative w-full max-w-4xl max-h-[90vh] bg-neutral-900 border border-neutral-700 rounded-2xl shadow-2xl overflow-hidden flex flex-col">
+        <div className="flex items-center justify-between px-6 py-4 border-b border-neutral-800 shrink-0">
+          <div className="flex items-center gap-2">
+            <Eye className="w-4 h-4 text-emerald-400" />
+            <span className="text-sm font-bold text-gray-200">👁 Xem trước toàn bộ prompt</span>
+          </div>
+          <button onClick={onClose} className="p-1 text-gray-500 hover:text-gray-300 hover:bg-neutral-800 rounded-lg transition-colors">
+            <X className="w-5 h-5" />
+          </button>
+        </div>
+        <div className="flex-1 overflow-y-auto p-6">
+          <pre className="text-[11px] text-gray-300 font-mono whitespace-pre-wrap leading-relaxed">
+            {fullPrompt || '(Chưa có nội dung prompt nào)'}
+          </pre>
+        </div>
+        <div className="px-6 py-3 border-t border-neutral-800 shrink-0 flex justify-end">
+          <button onClick={onClose} className="px-4 py-2 bg-neutral-800 hover:bg-neutral-700 text-gray-300 rounded-lg text-xs font-semibold transition-colors">
+            Đóng
+          </button>
+        </div>
+      </div>
+    </div>
+  );
+}
+
 // ─── Page4Rules ───────────────────────────────────────────────────────────────
 export default function Page4Rules({ state, updateState, onNavigate }: Page4RulesProps) {
   const { rules } = state;
   const [hardExpanded, setHardExpanded] = useState(true);
   const [guideAdded, setGuideAdded] = useState(
-    rules.mandatory?.includes('HƯỚNG DẪN THAM KHẢO') || false
+    rules.mandatory?.includes(GUIDE_START_MARKER) || false
   );
+  const [forbiddenGuideAdded, setForbiddenGuideAdded] = useState(
+    rules.forbidden?.includes('🚫 DANH SÁCH CẤM KỴ BỔ SUNG') || false
+  );
+  const [showPromptPreview, setShowPromptPreview] = useState(false);
 
   const hardRules: HardRules = rules.hardRules ?? DEFAULT_HARD_RULES;
 
@@ -537,77 +900,58 @@ export default function Page4Rules({ state, updateState, onNavigate }: Page4Rule
 
   const groups = Array.from(new Set(RULE_DEFS.map(r => r.group)));
 
-  // ─── MỚI: Thêm hướng dẫn tham khảo ──────────────────────────────────────
+  // ─── Thêm hướng dẫn tham khảo (có lexicon) ──────────────────────────────
   const addReferenceGuide = () => {
-    const guidelines = `📝 HƯỚNG DẪN THAM KHẢO - LINH HOẠT, KHÔNG RẬP KHUÔN:
-
-🏞️ MÔI TRƯỜNG & KHÔNG GIAN:
-- Miêu tả không gian, thời tiết, ánh sáng, âm thanh, mùi hương
-- Tạo bầu không khí phù hợp với cảnh (lãng mạn, căng thẳng, u tối, ấm cúng...)
-- Không cần miêu tả quá dài dòng, chỉ cần đủ để người đọc hình dung
-
-🧍 CƠ THỂ & CẢM XÚC:
-- Vóc dáng, làn da, khuôn mặt, đôi mắt, mái tóc
-- Cảm xúc: vui, buồn, tức, sợ, bối rối, phấn khích, xấu hổ...
-- Biểu cảm: nhíu mày, mỉm cười, đỏ mặt, ánh mắt lấp lánh, run rẩy...
-- Linh hoạt, không miêu tả cứng nhắc mọi lúc
-
-👘 Y PHỤC & PHỤ KIỆN:
-- Trang phục, nội y, trang sức, phụ kiện
-- Màu sắc, chất liệu, kiểu dáng khi có ý nghĩa đặc biệt
-- Không cần liệt kê chi tiết từng bộ phận trang phục
-
-💬 LỜI THOẠI:
-- Phù hợp ngữ cảnh: căng thẳng, vui vẻ, bi thương, gấp gáp...
-- Ngữ điệu: gấp gáp, nghẹn ngào, thì thầm, dứt khoát, mỉa mai...
-- Dùng câu ngắn khi cao trào, câu dài khi trữ tình
-
-🧠 NỘI TÂM:
-- Suy nghĩ, trăn trở, ký ức, mâu thuẫn nội tâm
-- Xen kẽ tự nhiên với hành động và đối thoại
-
-🎭 BIỂU LỘ CẢM XÚC:
-- Cam chịu: cắn môi, nắm tay, mắt nhìn xuống
-- Sa ngã: mất phương hướng, tuyệt vọng, buông xuôi
-- Chịu đựng: cố nén, lặng im, gồng mình
-- Chấp nhận: thở dài, gật đầu, mỉm cười miễn cưỡng
-- Hưng phấn: mắt sáng rực, nụ cười rạng rỡ
-- Kìm nén: siết chặt tay, cổ họng nghẹn lại
-
-🖐️ CỬ CHỈ & HÀNH ĐỘNG:
-- Cử chỉ, tư thế, động tác cơ thể
-- Phù hợp với tình huống và tính cách nhân vật
-- Tự nhiên, không cường điệu hóa
-
-💞 TƯƠNG TÁC & QUAN HỆ THÂN MẬT:
-- Diễn tả cảm xúc, ham muốn, rung động khi gần gũi
-- Khoảnh khắc chạm mắt, chạm tay, hơi thở gấp gáp
-- Ngôn ngữ cơ thể: đôi tay vuốt ve, ánh mắt giao nhau, hơi thở hòa quyện
-- Cảm giác ngại ngùng, bồi hồi, khao khát, say mê
-- Khoái cảm dâng trào, mê đắm, cuồng nhiệt
-- Sau đó: dịu dàng, ấm áp, thỏa mãn, hoặc tiếc nuối, cô đơn
-
-💡 LƯU Ý: Đây là HƯỚNG DẪN THAM KHẢO, không phải quy tắc cứng nhắc. AI có thể LINH HOẠT SÁNG TẠO để tránh rập khuôn, giữ văn phong tự nhiên, hấp dẫn và phù hợp với từng cảnh cụ thể.`;
-
+    const lexiconBlock = buildLexiconPrompt(state.rules.sexualLexicon);
+    const content = REFERENCE_GUIDELINES + '\n\n' + lexiconBlock;
+    const wrapped = GUIDE_START_MARKER + '\n' + content + '\n' + GUIDE_END_MARKER;
     updateState((prev) => {
-      prev.rules.mandatory = prev.rules.mandatory 
-        ? prev.rules.mandatory + '\n\n' + guidelines 
-        : guidelines;
+      prev.rules.mandatory = prev.rules.mandatory
+        ? prev.rules.mandatory + '\n\n' + wrapped
+        : wrapped;
     });
     setGuideAdded(true);
   };
 
+  // ─── SỬA: removeGuide dùng marker an toàn ─────────────────────────────
   const removeGuide = () => {
     if (confirm('Xóa hướng dẫn tham khảo?')) {
-      // Xóa phần hướng dẫn khỏi mandatory
       const current = rules.mandatory || '';
-      const cleaned = current
-        .replace(/📝 HƯỚNG DẪN THAM KHẢO - LINH HOẠT, KHÔNG RẬP KHUÔN:[\s\S]*?(?=\n\n|$)/, '')
-        .trim();
+      const regex = new RegExp(
+        `${GUIDE_START_MARKER}[\\s\\S]*?${GUIDE_END_MARKER}`,
+        'gm'
+      );
+      const cleaned = current.replace(regex, '').replace(/\n{3,}/g, '\n\n').trim();
       updateState((prev) => {
         prev.rules.mandatory = cleaned;
       });
       setGuideAdded(false);
+    }
+  };
+
+  // ─── Thêm danh sách cấm kỵ bổ sung ─────────────────────────────────────
+  const addForbiddenGuide = () => {
+    updateState((prev) => {
+      prev.rules.forbidden = prev.rules.forbidden
+        ? prev.rules.forbidden + '\n\n' + FORBIDDEN_GUIDELINES
+        : FORBIDDEN_GUIDELINES;
+    });
+    setForbiddenGuideAdded(true);
+  };
+
+  const removeForbiddenGuide = () => {
+    if (confirm('Xóa danh sách cấm kỵ bổ sung?')) {
+      const current = rules.forbidden || '';
+      const idx = current.indexOf(FORBIDDEN_GUIDELINES);
+      const cleaned = idx === -1
+        ? current
+        : (current.slice(0, idx) + current.slice(idx + FORBIDDEN_GUIDELINES.length))
+            .replace(/\n{3,}/g, '\n\n')
+            .trim();
+      updateState((prev) => {
+        prev.rules.forbidden = cleaned;
+      });
+      setForbiddenGuideAdded(false);
     }
   };
 
@@ -625,9 +969,10 @@ export default function Page4Rules({ state, updateState, onNavigate }: Page4Rule
 
       <div className="space-y-6">
 
-        {/* ══════════════════════════════════════════════
-            📝 HƯỚNG DẪN THAM KHẢO (MỚI)
-        ══════════════════════════════════════════════ */}
+        {/* ─── LexiconEditor ──────────────────────────────────────────────── */}
+        <LexiconEditor state={state} updateState={updateState} />
+
+        {/* ─── Hướng Dẫn Tham Khảo ────────────────────────────────────────── */}
         <div className="bg-gradient-to-br from-violet-950/20 via-neutral-900 to-neutral-900 border border-violet-700/30 rounded-2xl overflow-hidden">
           <div className="px-5 py-4 border-b border-violet-900/30">
             <div className="flex items-center justify-between">
@@ -657,26 +1002,21 @@ export default function Page4Rules({ state, updateState, onNavigate }: Page4Rule
           </div>
 
           {guideAdded && (
-            <div className="px-5 py-3 text-[11px] text-gray-300 leading-relaxed max-h-48 overflow-y-auto">
-              <p className="text-green-400 text-[10px] font-semibold mb-2">✅ Đã thêm hướng dẫn tham khảo vào "Điều bắt buộc"</p>
-              <p className="text-gray-500 text-[10px]">
-                Xem và chỉnh sửa nội dung đầy đủ trong ô "ĐIỀU BẮT BUỘC PHẢI TUÂN THỦ" bên dưới.
-              </p>
+            <div className="px-5 py-3 bg-green-950/20 border border-green-800/40 rounded-lg text-[10px] text-green-300 flex items-center gap-2">
+              <CheckCircle2 className="w-3.5 h-3.5 shrink-0" />
+              <span>✅ Đã thêm hướng dẫn tham khảo + bộ từ vựng vào "Điều bắt buộc"</span>
             </div>
           )}
 
           {!guideAdded && (
-            <div className="px-5 py-4 text-center text-gray-500 text-xs">
-              ⚠️ Chưa có hướng dẫn tham khảo. Bấm "Thêm hướng dẫn" để cài đặt.
-              <br />
-              <span className="text-gray-600">(Hướng dẫn này sẽ được đẩy vào AI mỗi lần viết)</span>
+            <div className="px-5 py-3 bg-amber-950/20 border border-amber-800/40 rounded-lg text-[10px] text-amber-300 flex items-center gap-2">
+              <AlertCircle className="w-3.5 h-3.5 shrink-0" />
+              <span>⚠️ Chưa có hướng dẫn tham khảo. Bấm "Thêm hướng dẫn" để cài đặt.</span>
             </div>
           )}
         </div>
 
-        {/* ══════════════════════════════════════════════
-            🔒 RÀNG BUỘC CỨNG AI
-        ══════════════════════════════════════════════ */}
+        {/* ─── Ràng Buộc Cứng AI ──────────────────────────────────────────── */}
         <div className="bg-neutral-900 border border-red-900/30 rounded-2xl overflow-hidden">
           <button
             onClick={() => setHardExpanded(!hardExpanded)}
@@ -788,9 +1128,41 @@ export default function Page4Rules({ state, updateState, onNavigate }: Page4Rule
           </div>
 
           <div className="bg-neutral-900 border border-neutral-850 rounded-xl p-5 space-y-3">
-            <h3 className="text-sm font-bold text-red-400 flex items-center gap-1.5 font-sans">
-              <AlertOctagon className="w-4 h-4" /> ĐIỀU CẤM KỴ TUYỆT ĐỐI (OOC/FORBIDDEN)
-            </h3>
+            <div className="flex items-center justify-between">
+              <h3 className="text-sm font-bold text-red-400 flex items-center gap-1.5 font-sans">
+                <AlertOctagon className="w-4 h-4" /> ĐIỀU CẤM KỴ TUYỆT ĐỐI (OOC/FORBIDDEN)
+              </h3>
+              {!forbiddenGuideAdded ? (
+                <button
+                  onClick={addForbiddenGuide}
+                  className="px-3 py-1.5 bg-red-700 hover:bg-red-600 text-white rounded-lg text-[10px] font-semibold flex items-center gap-1.5 transition-colors shrink-0"
+                >
+                  <Plus className="w-3.5 h-3.5" /> Thêm gợi ý cấm
+                </button>
+              ) : (
+                <button
+                  onClick={removeForbiddenGuide}
+                  className="px-3 py-1.5 bg-neutral-950/40 border border-neutral-800/40 hover:bg-neutral-950/60 text-gray-400 rounded-lg text-[10px] transition-colors shrink-0"
+                >
+                  <Trash2 className="w-3.5 h-3.5 inline mr-1" /> Xóa
+                </button>
+              )}
+            </div>
+
+            {forbiddenGuideAdded && (
+              <div className="px-3 py-2 bg-red-950/20 border border-red-800/40 rounded-lg text-[10px] text-red-300 flex items-center gap-2">
+                <CheckCircle2 className="w-3.5 h-3.5 shrink-0" />
+                <span>✅ Đã thêm danh sách cấm kỵ bổ sung vào "Điều cấm kỵ"</span>
+              </div>
+            )}
+
+            {!forbiddenGuideAdded && (
+              <div className="px-3 py-2 bg-amber-950/20 border border-amber-800/40 rounded-lg text-[10px] text-amber-300 flex items-center gap-2">
+                <AlertCircle className="w-3.5 h-3.5 shrink-0" />
+                <span>⚠️ Chưa có danh sách cấm kỵ bổ sung. Bấm "Thêm gợi ý cấm" để cài đặt.</span>
+              </div>
+            )}
+
             <p className="text-[10px] text-gray-400">Những chi tiết mà AI tuyệt đối không được viết (tránh OOC, phá vỡ logic nguyên tác).</p>
             <textarea
               rows={10}
@@ -835,12 +1207,20 @@ export default function Page4Rules({ state, updateState, onNavigate }: Page4Rule
           />
         </div>
 
-        {/* ══════════════════════════════════════════════
-            📚 LORE & TÀI NGUYÊN TRUYỆN
-        ══════════════════════════════════════════════ */}
+        {/* ─── Lore ────────────────────────────────────────────────────────── */}
         <LoreSection state={state} updateState={updateState} />
 
-        {/* ── Mẹo ── */}
+        {/* ─── Xem trước prompt ────────────────────────────────────────────── */}
+        <div className="flex flex-wrap gap-3">
+          <button
+            onClick={() => setShowPromptPreview(true)}
+            className="px-4 py-2 bg-emerald-950/40 border border-emerald-800/40 hover:bg-emerald-950/60 hover:border-emerald-600/60 rounded-lg text-xs text-emerald-300 flex items-center gap-1.5 transition-colors"
+          >
+            <Eye className="w-3.5 h-3.5" /> 👁 Xem trước toàn bộ prompt
+          </button>
+        </div>
+
+        {/* ─── Mẹo ── */}
         <div className="p-4 bg-red-950/20 border border-red-900/40 rounded-xl text-xs text-red-300 leading-relaxed">
           💡 <strong>Mẹo nhỏ cho tác giả:</strong> Hệ thống tự động đẩy toàn bộ dàn nhân vật kết nối chồng/vợ/cừu hận cũng như các môn phái mà bạn thiết lập ở <strong>Trang 3</strong> vào khu vực trí nhớ của AI. AI sẽ phân tích mối quan hệ để viết chuẩn xác mạch truyện logic, không sợ OOC. <strong>Ràng buộc cứng ở trên sẽ được tự động chèn vào mọi lần gọi AI.</strong>
           {state.config.referenceFileContent && (
@@ -850,12 +1230,12 @@ export default function Page4Rules({ state, updateState, onNavigate }: Page4Rule
           )}
         </div>
 
-        {/* ── Nav ── */}
+        {/* ─── Nav ── */}
         <div className="flex justify-end gap-3 pt-4">
           <button
             type="button"
             onClick={() => onNavigate('characters')}
-            className="px-5 py-2.5 bg-neutral-800 border border-neutral-700 hover:bg-neutral-750 text-neutral-300 rounded-lg text-sm"
+            className="px-5 py-2.5 bg-neutral-800 border border-neutral-700 hover:bg-neutral-700 text-neutral-300 rounded-lg text-sm"
           >
             Quay Lại
           </button>
@@ -882,6 +1262,11 @@ export default function Page4Rules({ state, updateState, onNavigate }: Page4Rule
           </button>
         </div>
       </div>
+
+      {/* ─── Prompt Preview Modal ── */}
+      {showPromptPreview && (
+        <PromptPreview state={state} onClose={() => setShowPromptPreview(false)} />
+      )}
     </div>
   );
 }
