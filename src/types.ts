@@ -164,7 +164,7 @@ export interface WorldEntity {
 }
 
 // ──────────────────────────────────────────────────────────────────────────────
-// 8. CẤU HÌNH TRUYỆN (NovelConfig)
+// 8. CẤU HÌNH TRUYỆN (NovelConfig) - CẬP NHẬT
 // ──────────────────────────────────────────────────────────────────────────────
 export interface NovelConfig {
   title: string;
@@ -183,7 +183,8 @@ export interface NovelConfig {
     order: number;
     label: string;
   };
-  writeMode?: 'continue' | 'rewrite' | 'scene' | 'reborn';
+  // 👈 SỬA: Thêm 'fresh' vào writeMode
+  writeMode?: 'continue' | 'rewrite' | 'scene' | 'reborn' | 'fresh';
   sourceSceneText?: string;
   rebornCharacterId?: string;
   selectedEventId?: string;
@@ -200,7 +201,7 @@ export interface LoreEntry {
 }
 
 // ──────────────────────────────────────────────────────────────────────────────
-// 10. RÀNG BUỘC CỨNG (HardRules) - CẬP NHẬT
+// 10. RÀNG BUỘC CỨNG (HardRules)
 // ──────────────────────────────────────────────────────────────────────────────
 export interface HardRules {
   noSelfEnding: boolean;
@@ -220,7 +221,6 @@ export interface HardRules {
   noFutureCharacters: boolean;
   noSelfAddPlot: boolean;
   noDangerousTone: boolean;
-  // 👈 MỚI: 3 rule cho Page4Rules
   noAddScene: boolean;
   noSkipNoAvoid: boolean;
   requireDetailedSexScene: boolean;
@@ -265,7 +265,7 @@ export interface NovelState {
 }
 
 // ──────────────────────────────────────────────────────────────────────────────
-// 14. DEFAULT STATE - CẬP NHẬT
+// 14. DEFAULT STATE
 // ──────────────────────────────────────────────────────────────────────────────
 export const defaultNovelState: NovelState = {
   config: {
@@ -311,7 +311,6 @@ export const defaultNovelState: NovelState = {
       noFutureCharacters: false,
       noSelfAddPlot: false,
       noDangerousTone: false,
-      // 👈 MỚI: 3 rule mới
       noAddScene: false,
       noSkipNoAvoid: false,
       requireDetailedSexScene: false,
@@ -387,7 +386,7 @@ export function validateProjectQuality(state: NovelState): {
 }
 
 // ──────────────────────────────────────────────────────────────────────────────
-// 18. HELPER: Lấy danh sách rule đang bật - CẬP NHẬT
+// 18. HELPER: Lấy danh sách rule đang bật
 // ──────────────────────────────────────────────────────────────────────────────
 export function getActiveRules(hardRules: HardRules): string[] {
   const active: string[] = [];
@@ -409,7 +408,6 @@ export function getActiveRules(hardRules: HardRules): string[] {
     noFutureCharacters: 'Cấm nhắc nhân vật chưa xuất hiện',
     noSelfAddPlot: 'Cấm tự thêm tình tiết mới',
     noDangerousTone: 'Cấm câu từ đe dọa, xáo rỗng',
-    // 👈 MỚI: 3 rule mới
     noAddScene: 'Cấm tự thêm cảnh mới',
     noSkipNoAvoid: 'Cấm lảng tránh, né tránh cảnh H',
     requireDetailedSexScene: 'Bắt buộc viết chi tiết cảnh H',

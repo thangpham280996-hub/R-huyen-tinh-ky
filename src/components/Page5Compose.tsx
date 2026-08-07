@@ -49,7 +49,9 @@ const QUICK_ANALYSIS = [
   { icon: '❤️', label: 'Romance', prompt: 'Phân tích chemistry và tiến triển tình cảm giữa các cặp nhân vật: có tự nhiên không, nhịp độ có hợp lý không, điểm nào cần thêm tension?' },
 ];
 
+// ✅ BƯỚC 1: Thêm 'fresh' vào đầu danh sách
 const WRITE_MODES = [
+  { v: 'fresh' as const, label: '✨ Viết mới' },
   { v: 'continue' as const, label: 'Tiếp tục' },
   { v: 'rewrite' as const, label: 'Viết lại' },
   { v: 'scene' as const, label: 'Nhảy cảnh' },
@@ -173,9 +175,7 @@ export function buildSystemInstruction(state: NovelState): string {
     .map(e => `[${e.category}] ${e.title}: ${e.content.slice(0, 100)}`)
     .join('\n');
 
-  // 👈 SỬA 1: Gọi buildHardRulesPrompt thay vì tự viết Object.entries
   const hardRulesBlock = buildHardRulesPrompt(rules?.hardRules);
-
   const lexiconBlock = buildLexiconPrompt(state.rules.sexualLexicon);
 
   let refSection = '';
@@ -188,7 +188,6 @@ export function buildSystemInstruction(state: NovelState): string {
 
   const existingCharNames = visibleCharacters.map(c => c.name).join(', ') || 'Chưa có';
 
-  // 👈 SỬA 2: Xóa các dòng đã có trong hardRulesBlock
   const behaviorConstraints = `
 ⛔ RÀNG BUỘC BỔ SUNG:
 - CHỈ viết theo mệnh lệnh, KHÔNG tự thêm nhân vật/tình tiết
@@ -205,7 +204,6 @@ export function buildSystemInstruction(state: NovelState): string {
     return `${w.name}(${w.type}): ${w.description.slice(0, 60)}${extra}`;
   }).join('\n') || 'Chưa có';
 
-  // 👈 SỬA 3: Đặt hardRulesBlock trước behaviorConstraints
   return `Truyện: ${config.title || 'Chưa đặt tên'} - ${config.genres.join(', ')}
 Bối cảnh: ${config.context?.slice(0, 150) || 'Chưa mô tả'}
 Văn phong: ${config.writingStyle || ''} ${config.customStyle || ''}
@@ -231,13 +229,14 @@ ${lexiconBlock}`;
 }
 
 // ─── RÚT GỌN: buildWritePrompt ────────────────────────────────────────────
+// ✅ BƯỚC 3: Cập nhật type và default
 function buildWritePrompt(
   activeChapter: Chapter,
   allChapters: Chapter[],
   authorDirective: string,
   targetRange: [number, number],
   state: NovelState,
-  writeMode: 'continue' | 'rewrite' | 'scene' | 'reborn' = 'continue',
+  writeMode: 'continue' | 'rewrite' | 'scene' | 'reborn' | 'fresh' = 'fresh',
   sourceSceneText: string = '',
   rebornCharacterName: string = ''
 ): string {
@@ -259,7 +258,10 @@ function buildWritePrompt(
   const [minW, maxW] = targetRange;
   let prompt = '';
 
-  if (writeMode === 'scene' && sourceSceneText.trim()) {
+  // ✅ BƯỚC 4: Thêm block xử lý 'fresh'
+  if (writeMode === 'fresh') {
+    prompt += `🆕 VIẾT MỚI CHƯƠNG: Viết nội dung cho chương này từ đầu. Không tiếp nối đoạn dở nào trong chương hiện tại. Dựa vào dàn ý và mệnh lệnh bên dưới.\n\n`;
+  } else if (writeMode === 'scene' && sourceSceneText.trim()) {
     prompt += `CẢNH GỐC:\n${sourceSceneText.trim().slice(0, 1500)}\n\nViết TIẾP từ đây, nội dung MỚI.\n\n`;
   } else if (writeMode === 'rewrite' && sourceSceneText.trim()) {
     prompt += `VIẾT LẠI:\n${sourceSceneText.trim().slice(0, 1500)}\n\n`;
@@ -267,11 +269,14 @@ function buildWritePrompt(
     prompt += `TRỌNG SINH: ${rebornCharacterName || 'NV'} biết trước:\n${sourceSceneText.trim().slice(0, 2000)}\n\n`;
   }
 
+  // ✅ BƯỚC 5: Phân biệt prevTail và currentTail theo mode
+  // fresh và continue đều cần biết kết chương trước để liên kết câu chuyện
   if (prevTail) {
     prompt += `[CHƯƠNG TRƯỚC - KẾT]\n${prevTail}\n\n`;
   }
 
-  if (currentTail) {
+  // Chỉ continue cần tiếp nối đoạn dở trong chương hiện tại
+  if (writeMode === 'continue' && currentTail) {
     prompt += `[ĐANG VIẾT - TIẾP NGAY SAU]\n${currentTail}\n\n`;
   }
 
@@ -299,12 +304,13 @@ export default function Page5Compose({ state, updateState, onNavigate }: Page5Co
   const [previousContent, setPreviousContent] = useState<string | null>(null);
   const [selectedRange, setSelectedRange] = useState<number>(1500);
 
-  // ─── Persist writeMode qua state global ──────────────────────────────────
-  const [writeMode, setWriteMode] = useState<'continue' | 'rewrite' | 'scene' | 'reborn'>(
+  // ✅ BƯỚC 2: Cập nhật type cho state
+  const [writeMode, setWriteMode] = useState<'continue' | 'rewrite' | 'scene' | 'reborn' | 'fresh'>(
     state.config.writeMode || 'continue'
   );
 
-  const handleSetWriteMode = (mode: 'continue' | 'rewrite' | 'scene' | 'reborn') => {
+  // ✅ BƯỚC 2: Cập nhật type cho handler
+  const handleSetWriteMode = (mode: 'continue' | 'rewrite' | 'scene' | 'reborn' | 'fresh') => {
     setWriteMode(mode);
     updateState((prev) => {
       prev.config.writeMode = mode;
@@ -642,7 +648,7 @@ Trả lời câu hỏi của tác giả: phân tích sâu, gợi ý thực tế,
       const textGenerated = (data.text || '').trim().normalize('NFC');
       if (!textGenerated) throw new Error('AI trả về nội dung trống rỗng.');
 
-      if (activeChapter.content.trim()) {
+      if (writeMode !== 'fresh' && activeChapter.content.trim()) {
         const oldTail = activeChapter.content.slice(-300).trim();
         if (textGenerated.includes(oldTail.substring(0, 100))) {
           setAiError('⚠️ AI có thể đang lặp nội dung. Kiểm tra kết quả và thử lại với mệnh lệnh cụ thể hơn.');
@@ -650,7 +656,14 @@ Trả lời câu hỏi của tác giả: phân tích sâu, gợi ý thực tế,
       }
 
       setPreviousContent(activeChapter.content);
-      const appended = (activeChapter.content ? activeChapter.content + '\n\n' : '') + textGenerated;
+      let appended;
+      if (writeMode === 'fresh') {
+        // Viết mới: thay thế toàn bộ nội dung
+        appended = textGenerated;
+      } else {
+        // Các chế độ khác: nối thêm
+        appended = (activeChapter.content ? activeChapter.content + '\n\n' : '') + textGenerated;
+      }
       handleUpdateField('content', appended);
 
       setTimeout(() => {
@@ -909,13 +922,30 @@ Trả lời câu hỏi của tác giả: phân tích sâu, gợi ý thực tế,
                 {/* ─── Chế Độ ────────────────────────────────────────────────── */}
                 <div className="bg-neutral-900 border border-neutral-850 rounded-xl p-3 space-y-2">
                   <span className="text-[11px] font-bold text-gray-200">🎬 Chế Độ</span>
+                  {/* ✅ BƯỚC 6: UI với hint */}
                   <div className="grid grid-cols-2 gap-1">
-                    {WRITE_MODES.map(m => (
-                      <button key={m.v} onClick={() => handleSetWriteMode(m.v)} className={`px-2 py-1.5 rounded-lg text-[10px] border transition-all ${writeMode === m.v ? 'bg-violet-900/40 border-violet-600/60 text-violet-200' : 'bg-neutral-950/60 border-neutral-800 text-gray-500 hover:border-neutral-600'}`}>
-                        {m.label}
-                      </button>
-                    ))}
+                    {WRITE_MODES.map(m => {
+                      const isFreshRecommended = getWordCount(activeChapter.content) < 50;
+                      const isWrongMode = m.v === 'continue' && isFreshRecommended;
+                      return (
+                        <button key={m.v} onClick={() => handleSetWriteMode(m.v)} 
+                          className={`px-2 py-1.5 rounded-lg text-[10px] border transition-all relative ${
+                            writeMode === m.v 
+                              ? 'bg-violet-900/40 border-violet-600/60 text-violet-200' 
+                              : 'bg-neutral-950/60 border-neutral-800 text-gray-500 hover:border-neutral-600'
+                          } ${isWrongMode ? 'border-amber-800/50' : ''}`}>
+                          {m.label}
+                          {m.v === 'fresh' && isFreshRecommended && writeMode !== 'fresh' && (
+                            <span className="absolute -top-1 -right-1 w-2 h-2 bg-amber-500 rounded-full animate-pulse" title="Đề xuất cho chương trống" />
+                          )}
+                        </button>
+                      );
+                    })}
                   </div>
+                  {writeMode === 'continue' && getWordCount(activeChapter.content) < 50 && (
+                    <p className="text-[9px] text-amber-400 mt-1">💡 Chương đang trống. Nút "✨ Viết mới" sẽ phù hợp hơn.</p>
+                  )}
+
                   {writeMode === 'reborn' && (
                     <div className="pt-1">
                       <label className="block text-[9px] text-gray-500 mb-1">Nhân vật trọng sinh</label>
@@ -931,7 +961,7 @@ Trả lời câu hỏi của tác giả: phân tích sâu, gợi ý thực tế,
                   )}
 
                   {/* ─── UI dropdown chọn cảnh ──────────────────────────────── */}
-                  {writeMode !== 'continue' && scenes.length > 0 && (
+                  {writeMode !== 'continue' && writeMode !== 'fresh' && scenes.length > 0 && (
                     <div className="space-y-1.5 pt-2 border-t border-neutral-800/50 mt-2">
                       <label className="block text-[9px] text-amber-400 font-bold mb-1">
                         {writeMode === 'rewrite' && '📝 Chọn cảnh gốc để AI viết lại'}
@@ -981,7 +1011,7 @@ Trả lời câu hỏi của tác giả: phân tích sâu, gợi ý thực tế,
                       )}
                     </div>
                   )}
-                  {writeMode !== 'continue' && scenes.length === 0 && (
+                  {writeMode !== 'continue' && writeMode !== 'fresh' && scenes.length === 0 && (
                     <div className="p-2 bg-amber-950/20 border border-amber-900/30 rounded-lg text-[10px] text-amber-400">
                       ⚠️ Chưa có dữ liệu Đồng Nhân. Vào trang <strong>Ý Tưởng</strong> để upload file gốc.
                     </div>
