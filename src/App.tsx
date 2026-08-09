@@ -49,10 +49,43 @@ class ErrorBoundary extends React.Component<
   }
 }
 
+// ─── ConfirmDialog ──────────────────────────────────────────────────────────
+function ConfirmDialog({
+  title,
+  message,
+  confirmLabel = 'Xoá',
+  onConfirm,
+  onCancel,
+}: {
+  title: string;
+  message: string;
+  confirmLabel?: string;
+  onConfirm: () => void;
+  onCancel: () => void;
+}) {
+  return (
+    <div className="fixed inset-0 z-[60] flex items-center justify-center p-4">
+      <div className="absolute inset-0 bg-black/75 backdrop-blur-sm" onClick={onCancel} />
+      <div className="relative w-full max-w-sm bg-neutral-900 border border-red-900/50 rounded-2xl p-5 space-y-4 shadow-2xl">
+        <h3 className="text-sm font-bold text-gray-100">{title}</h3>
+        <p className="text-xs text-gray-400 whitespace-pre-line leading-relaxed">{message}</p>
+        <div className="flex justify-end gap-2 pt-1">
+          <button onClick={onCancel} className="px-3 py-1.5 text-xs text-gray-400 hover:bg-neutral-800 rounded-lg">
+            Hủy
+          </button>
+          <button onClick={onConfirm} className="px-3 py-1.5 text-xs bg-red-900/70 border border-red-700 text-red-200 hover:bg-red-800/80 rounded-lg font-semibold">
+            {confirmLabel}
+          </button>
+        </div>
+      </div>
+    </div>
+  );
+}
+
 // ─── Constants ────────────────────────────────────────────────────────────────
-const PROJECT_LIST_KEY   = 'htk_project_list';      // danh sách meta các dự án
-const PROJECT_PREFIX     = 'htk_project_';           // prefix data từng dự án
-const ACTIVE_PROJECT_KEY = 'htk_active_project';     // id dự án đang mở
+const PROJECT_LIST_KEY   = 'htk_project_list';
+const PROJECT_PREFIX     = 'htk_project_';
+const ACTIVE_PROJECT_KEY = 'htk_active_project';
 const BACKUP_LIST_KEY    = 'htk_backups';
 const BACKUP_DATA_PREFIX = 'htk_bk_';
 const MAX_AUTO_BACKUPS   = 7;
@@ -141,7 +174,6 @@ function loadProject(id: string): NovelState | null {
 
 function saveProject(id: string, state: NovelState) {
   localStorage.setItem(PROJECT_PREFIX + id, JSON.stringify(state));
-  // Cập nhật meta
   const wordCount = state.chapters.reduce(
     (acc, c) => acc + (c.content?.split(/\s+/).filter(Boolean).length || 0), 0
   );
@@ -164,7 +196,6 @@ function saveProject(id: string, state: NovelState) {
 function deleteProject(id: string) {
   localStorage.removeItem(PROJECT_PREFIX + id);
   saveProjectList(loadProjectList().filter(p => p.id !== id));
-  // Xoá backup liên quan
   loadBackupList()
     .filter(b => b.projectId === id)
     .forEach(b => { try { localStorage.removeItem(BACKUP_DATA_PREFIX + b.id); } catch {} });
@@ -246,14 +277,21 @@ function ProjectLibrary({
   onClose: () => void;
 }) {
   const [list, setList] = useState<ProjectMeta[]>([]);
+  const [pendingDelete, setPendingDelete] = useState<{ id: string; title: string } | null>(null);
+
   useEffect(() => {
     setList(loadProjectList().sort((a, b) => b.updatedAt - a.updatedAt));
   }, []);
 
   const handleDelete = (id: string, title: string) => {
-    if (!confirm(`Xoá dự án "${title}"?\nThao tác này KHÔNG THỂ hoàn tác.`)) return;
-    deleteProject(id);
-    setList(prev => prev.filter(p => p.id !== id));
+    setPendingDelete({ id, title });
+  };
+
+  const confirmDeleteProject = () => {
+    if (!pendingDelete) return;
+    deleteProject(pendingDelete.id);
+    setList(prev => prev.filter(p => p.id !== pendingDelete.id));
+    setPendingDelete(null);
   };
 
   return (
@@ -272,7 +310,6 @@ function ProjectLibrary({
         </div>
 
         <div className="max-h-[65vh] overflow-y-auto px-5 py-4 space-y-3">
-          {/* Nút tạo mới */}
           <button
             onClick={onCreate}
             className="w-full flex items-center justify-center gap-2 py-3 border border-dashed border-red-800/50 hover:border-red-600/70 hover:bg-red-950/20 rounded-xl text-sm text-red-400 hover:text-red-300 transition-all font-semibold"
@@ -343,6 +380,15 @@ function ProjectLibrary({
         <div className="px-5 py-3 border-t border-neutral-800 text-[10px] text-gray-600 text-center">
           Mỗi dự án được lưu riêng biệt trong trình duyệt
         </div>
+
+        {pendingDelete && (
+          <ConfirmDialog
+            title="Xoá dự án"
+            message={`Xoá dự án "${pendingDelete.title}"?\nThao tác này KHÔNG THỂ hoàn tác.`}
+            onConfirm={confirmDeleteProject}
+            onCancel={() => setPendingDelete(null)}
+          />
+        )}
       </div>
     </div>
   );
@@ -359,6 +405,8 @@ function BackupPanel({
   onClose: () => void;
 }) {
   const [list, setList] = useState<BackupMeta[]>([]);
+  const [pendingDeleteId, setPendingDeleteId] = useState<string | null>(null);
+
   useEffect(() => {
     const all = loadBackupList()
       .filter(b => !projectId || b.projectId === projectId)
@@ -367,9 +415,14 @@ function BackupPanel({
   }, [projectId]);
 
   const handleDelete = (id: string) => {
-    if (!confirm('Xoá bản backup này?')) return;
-    deleteBackupItem(id);
-    setList(prev => prev.filter(b => b.id !== id));
+    setPendingDeleteId(id);
+  };
+
+  const confirmDeleteBackup = () => {
+    if (!pendingDeleteId) return;
+    deleteBackupItem(pendingDeleteId);
+    setList(prev => prev.filter(b => b.id !== pendingDeleteId));
+    setPendingDeleteId(null);
   };
 
   const autoBackups   = list.filter(b => b.type === 'auto');
@@ -423,12 +476,23 @@ function BackupPanel({
         <div className="px-5 py-3 border-t border-neutral-800 text-[10px] text-gray-600 text-center">
           Tự động lưu mỗi 30 giây • Giữ {MAX_AUTO_BACKUPS} bản tự động + {MAX_MANUAL_BACKUPS} bản thủ công
         </div>
+
+        {pendingDeleteId && (
+          <ConfirmDialog
+            title="Xoá bản backup"
+            message="Xoá bản backup này? Thao tác không thể hoàn tác."
+            onConfirm={confirmDeleteBackup}
+            onCancel={() => setPendingDeleteId(null)}
+          />
+        )}
       </div>
     </div>
   );
 }
 
 function BackupRow({ meta, onRestore, onDelete }: { meta: BackupMeta; onRestore: (id: string) => void; onDelete: (id: string) => void }) {
+  const [confirmRestore, setConfirmRestore] = useState(false);
+
   return (
     <div className="flex items-center gap-3 p-3 bg-neutral-950/60 border border-neutral-800 rounded-xl hover:border-neutral-700 transition-colors">
       <div className="flex-1 min-w-0">
@@ -441,7 +505,7 @@ function BackupRow({ meta, onRestore, onDelete }: { meta: BackupMeta; onRestore:
       </div>
       <div className="flex items-center gap-1.5 shrink-0">
         <button
-          onClick={() => { if (confirm(`Khôi phục "${meta.label}"?\nDữ liệu hiện tại sẽ được backup trước.`)) onRestore(meta.id); }}
+          onClick={() => setConfirmRestore(true)}
           className="px-2.5 py-1 bg-amber-900/40 border border-amber-800/50 hover:bg-amber-800/50 text-amber-300 rounded-lg text-[10px] font-semibold transition-colors"
         >
           Khôi phục
@@ -450,32 +514,40 @@ function BackupRow({ meta, onRestore, onDelete }: { meta: BackupMeta; onRestore:
           <X className="w-3 h-3" />
         </button>
       </div>
+
+      {confirmRestore && (
+        <ConfirmDialog
+          title="Khôi phục bản lưu"
+          message={`Khôi phục "${meta.label}"?\nDữ liệu hiện tại sẽ được backup trước.`}
+          confirmLabel="Khôi phục"
+          onConfirm={() => { onRestore(meta.id); setConfirmRestore(false); }}
+          onCancel={() => setConfirmRestore(false)}
+        />
+      )}
     </div>
   );
 }
 
 // ─── App ──────────────────────────────────────────────────────────────────────
 export default function App() {
-  // ── Project management state ──
   const [projectId, setProjectId]     = useState<string | null>(null);
   const [state, setState]             = useState<NovelState | null>(null);
   const [activeTab, setActiveTab]     = useState<string>('start');
   const [showLibrary, setShowLibrary] = useState(false);
   const [showBackup, setShowBackup]   = useState(false);
   const [saveFlash, setSaveFlash]     = useState<'ok' | 'err' | null>(null);
+  const [confirmDeleteCurrent, setConfirmDeleteCurrent] = useState(false);
+  const [confirmNewWorld, setConfirmNewWorld] = useState(false);
   const lastAutoBackupDay             = useRef<string>('');
 
-  // ── Load dự án khi khởi động ──
   useEffect(() => {
     const list = loadProjectList();
     let activeId = getActiveProjectId();
 
-    // Migrate: nếu có data cũ từ key cũ, chuyển sang project mới
     const oldData = localStorage.getItem('huyen_tinh_ky_state');
     if (oldData && list.length === 0) {
       try {
         const parsed = JSON.parse(oldData) as NovelState;
-        // Merge hardRules với default
         if (parsed.rules?.hardRules) {
           parsed.rules.hardRules = { ...DEFAULT_HARD_RULES, ...parsed.rules.hardRules };
         }
@@ -492,7 +564,6 @@ export default function App() {
     if (activeId && list.find(p => p.id === activeId)) {
       const data = loadProject(activeId);
       if (data) {
-        // 👈 SỬA: Merge hardRules với default để thêm key mới
         if (data.rules?.hardRules) {
           data.rules.hardRules = { ...DEFAULT_HARD_RULES, ...data.rules.hardRules };
         }
@@ -502,12 +573,10 @@ export default function App() {
       }
     }
 
-    // Nếu có dự án, mở dự án mới nhất
     if (list.length > 0) {
       const newest = list.sort((a, b) => b.updatedAt - a.updatedAt)[0];
       const data = loadProject(newest.id);
       if (data) {
-        // 👈 SỬA: Merge hardRules với default
         if (data.rules?.hardRules) {
           data.rules.hardRules = { ...DEFAULT_HARD_RULES, ...data.rules.hardRules };
         }
@@ -518,17 +587,14 @@ export default function App() {
       }
     }
 
-    // Không có gì — bắt đầu trạng thái trống, chưa có projectId
     setState(makeInitialState());
   }, []);
 
-  // ── Auto-save khi state thay đổi ──
   useEffect(() => {
     if (!state || !projectId) return;
     saveProject(projectId, state);
   }, [state, projectId]);
 
-  // ── Auto-backup mỗi 30 giây ──
   useEffect(() => {
     if (!state || !projectId) return;
     const interval = setInterval(() => {
@@ -559,9 +625,7 @@ export default function App() {
     });
   }, []);
 
-  // ── Tạo truyện mới ──
   const handleCreateNew = () => {
-    // Lưu dự án hiện tại trước nếu có
     if (state && projectId) {
       try {
         createBackup(projectId, state, 'manual', `Trước khi tạo truyện mới — ${new Date().toLocaleString('vi-VN')}`);
@@ -570,23 +634,18 @@ export default function App() {
     }
     const newId = genId();
     const newState = makeInitialState('Truyện Mới - ' + new Date().toLocaleDateString('vi-VN'));
-    // Lưu project mới vào storage TRƯỚC khi set state
     saveProject(newId, newState);
     setActiveProjectId(newId);
-    // Set state trước, projectId sau để tránh race condition
     setState(newState);
     setProjectId(newId);
     setShowLibrary(false);
     setActiveTab('idea');
   };
 
-  // ── Mở dự án khác ──
   const handleOpenProject = (id: string) => {
-    // Lưu dự án hiện tại
     if (state && projectId) saveProject(projectId, state);
     const data = loadProject(id);
     if (data) {
-      // Merge hardRules với default
       if (data.rules?.hardRules) {
         data.rules.hardRules = { ...DEFAULT_HARD_RULES, ...data.rules.hardRules };
       }
@@ -598,14 +657,14 @@ export default function App() {
     }
   };
 
-  // ── Xoá dự án hiện tại từ header (nút reset) ──
   const handleDeleteCurrent = () => {
     if (!projectId || !state) return;
-    if (!confirm(
-      `Xoá truyện "${state.config.title || 'chưa đặt tên'}"?\nThao tác KHÔNG THỂ hoàn tác.`
-    )) return;
+    setConfirmDeleteCurrent(true);
+  };
+
+  const runDeleteCurrent = () => {
+    if (!projectId || !state) return;
     deleteProject(projectId);
-    // Chuyển sang dự án khác hoặc trạng thái trống
     const remaining = loadProjectList();
     if (remaining.length > 0) {
       const newest = remaining.sort((a, b) => b.updatedAt - a.updatedAt)[0];
@@ -618,6 +677,7 @@ export default function App() {
         setActiveProjectId(newest.id);
         setState(data);
         setActiveTab('start');
+        setConfirmDeleteCurrent(false);
         return;
       }
     }
@@ -625,9 +685,9 @@ export default function App() {
     setActiveProjectId(null);
     setState(makeInitialState());
     setActiveTab('start');
+    setConfirmDeleteCurrent(false);
   };
 
-  // ── Manual backup ──
   const handleManualSave = () => {
     if (!state || !projectId) return;
     const result = createBackup(projectId, state, 'manual');
@@ -635,12 +695,10 @@ export default function App() {
     setTimeout(() => setSaveFlash(null), 2000);
   };
 
-  // ── Restore backup ──
   const handleRestore = (id: string) => {
     if (state && projectId) createBackup(projectId, state, 'manual', `Trước khi khôi phục — ${new Date().toLocaleString('vi-VN')}`);
     const restored = restoreBackup(id);
     if (restored && projectId) {
-      // Merge hardRules với default
       if (restored.rules?.hardRules) {
         restored.rules.hardRules = { ...DEFAULT_HARD_RULES, ...restored.rules.hardRules };
       }
@@ -652,7 +710,6 @@ export default function App() {
     }
   };
 
-  // ── Export JSON ──
   const handleExportJSON = () => {
     if (!state) return;
     const blob = new Blob([JSON.stringify(state, null, 2)], { type: 'application/json' });
@@ -664,18 +721,19 @@ export default function App() {
     URL.revokeObjectURL(url);
   };
 
-  // ── onEnterNewWorld cho Page1Start ──
   const handleEnterNewWorld = () => {
     if (state && projectId) {
       const hasContent = state.chapters.length > 0 || state.characters.length > 0 || state.config.title;
       if (hasContent) {
-        const ok = confirm(
-          `Đang mở truyện "${state.config.title || 'chưa đặt tên'}".\n` +
-          `Bấm OK → Lưu lại và tạo truyện mới.\nBấm Cancel → Quay lại.`
-        );
-        if (!ok) return;
+        setConfirmNewWorld(true);
+        return;
       }
     }
+    handleCreateNew();
+  };
+
+  const confirmEnterNewWorld = () => {
+    setConfirmNewWorld(false);
     handleCreateNew();
   };
 
@@ -697,7 +755,6 @@ export default function App() {
     <div className="min-h-screen bg-[#07070a] text-gray-100 flex flex-col font-sans selection:bg-red-900 selection:text-white">
       <div className="absolute top-0 left-0 right-0 h-96 bg-gradient-to-b from-red-950/10 via-[#07070a]/40 to-transparent pointer-events-none" />
 
-      {/* Header */}
       <header className="sticky top-0 z-30 bg-[#07070a]/90 backdrop-blur-md border-b border-neutral-900 px-6 py-4 flex items-center justify-between gap-3">
         <div onClick={() => setActiveTab('start')} className="flex items-center gap-2 cursor-pointer group shrink-0">
           <div className="w-8 h-8 rounded-lg bg-gradient-to-tr from-red-900 to-red-650 flex items-center justify-center shadow-lg shadow-red-900/30 group-hover:scale-105 transition-transform">
@@ -711,7 +768,6 @@ export default function App() {
           </div>
         </div>
 
-        {/* Nav */}
         <nav className="hidden md:flex items-center gap-1.5 bg-neutral-900/50 p-1 rounded-xl border border-neutral-850">
           {[
             { id: 'start', icon: LayoutDashboard, label: 'Bắt Đầu' },
@@ -734,9 +790,7 @@ export default function App() {
           ))}
         </nav>
 
-        {/* Right actions */}
         <div className="flex items-center gap-1.5">
-          {/* Save flash */}
           <div className={`hidden sm:flex items-center gap-1 px-2 py-1 rounded-lg text-[10px] font-mono transition-all ${
             saveFlash === 'ok' ? 'text-green-400 bg-green-950/30 border border-green-900/40' :
             saveFlash === 'err' ? 'text-red-400 bg-red-950/30 border border-red-900/40' : 'text-gray-600'
@@ -746,7 +800,6 @@ export default function App() {
              <><Clock className="w-3 h-3" /> Tự động lưu</>}
           </div>
 
-          {/* Thư viện dự án */}
           <button onClick={() => setShowLibrary(true)}
             className="relative p-1.5 bg-neutral-900 hover:bg-amber-950/30 border border-neutral-800 hover:border-amber-800/50 rounded-lg text-neutral-500 hover:text-amber-400 transition-colors flex items-center gap-1"
             title="Thư viện dự án">
@@ -759,14 +812,12 @@ export default function App() {
             )}
           </button>
 
-          {/* Manual save */}
           <button onClick={handleManualSave} title="Lưu backup thủ công"
             className="p-1.5 bg-neutral-900 hover:bg-amber-950/40 border border-neutral-800 hover:border-amber-800/50 rounded-lg text-neutral-500 hover:text-amber-400 transition-colors flex items-center gap-1">
             <Save className="w-3.5 h-3.5" />
             <span className="hidden sm:inline text-xs">Lưu</span>
           </button>
 
-          {/* Backup history */}
           <button onClick={() => setShowBackup(true)} title="Lịch sử backup"
             className="relative p-1.5 bg-neutral-900 hover:bg-neutral-800 border border-neutral-800 rounded-lg text-neutral-500 hover:text-amber-400 transition-colors flex items-center gap-1">
             <History className="w-3.5 h-3.5" />
@@ -778,14 +829,12 @@ export default function App() {
             )}
           </button>
 
-          {/* Export JSON */}
           <button onClick={handleExportJSON} title="Xuất JSON"
             className="hidden sm:flex p-1.5 bg-neutral-900 hover:bg-neutral-800 border border-neutral-800 rounded-lg text-neutral-500 hover:text-blue-400 transition-colors items-center gap-1">
             <Download className="w-3.5 h-3.5" />
             <span className="text-xs">JSON</span>
           </button>
 
-          {/* Xoá truyện hiện tại */}
           <button onClick={handleDeleteCurrent} title="Xoá truyện đang mở"
             className="p-1.5 bg-neutral-900 hover:bg-red-950/40 border border-neutral-800 hover:border-red-800/50 rounded-lg text-neutral-600 hover:text-red-400 transition-colors flex items-center gap-1">
             <Trash2 className="w-3.5 h-3.5" />
@@ -794,7 +843,6 @@ export default function App() {
         </div>
       </header>
 
-      {/* Current project indicator */}
       {currentMeta && (
         <div className="bg-neutral-950/80 border-b border-neutral-900 px-6 py-1.5 flex items-center gap-2">
           <BookMarked className="w-3 h-3 text-red-500 shrink-0" />
@@ -812,7 +860,6 @@ export default function App() {
         </div>
       )}
 
-      {/* Mobile nav */}
       <div className="md:hidden sticky top-[68px] z-25 bg-[#07070a] border-b border-neutral-900 overflow-x-auto py-2.5 px-4 flex gap-1.5">
         {[
           { id: 'start', label: 'Mở Đầu' }, { id: 'idea', label: 'Ý Tưởng' },
@@ -834,7 +881,6 @@ export default function App() {
         </div>
       </div>
 
-      {/* Main */}
       <main className="flex-1 relative z-10">
         {activeTab === 'start'      && <Page1Start      key={projectId || 'start'} state={state} updateState={updateState} onNavigate={setActiveTab} onEnterNewWorld={handleEnterNewWorld} />}
         {activeTab === 'idea'       && <Page2Idea       key={projectId || 'idea'} state={state} updateState={updateState} onNavigate={setActiveTab} />}
@@ -860,6 +906,23 @@ export default function App() {
           projectId={projectId}
           onRestore={handleRestore}
           onClose={() => setShowBackup(false)}
+        />
+      )}
+      {confirmDeleteCurrent && state && (
+        <ConfirmDialog
+          title="Xoá truyện đang mở"
+          message={`Xoá truyện "${state.config.title || 'chưa đặt tên'}"?\nThao tác KHÔNG THỂ hoàn tác.`}
+          onConfirm={runDeleteCurrent}
+          onCancel={() => setConfirmDeleteCurrent(false)}
+        />
+      )}
+      {confirmNewWorld && state && (
+        <ConfirmDialog
+          title="Tạo thế giới mới"
+          message={`Đang mở truyện "${state.config.title || 'chưa đặt tên'}".\nTruyện hiện tại sẽ được lưu lại trước khi bắt đầu truyện mới.`}
+          confirmLabel="Lưu & Tạo mới"
+          onConfirm={confirmEnterNewWorld}
+          onCancel={() => setConfirmNewWorld(false)}
         />
       )}
     </div>

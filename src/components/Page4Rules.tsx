@@ -36,14 +36,17 @@ export const DEFAULT_HARD_RULES: HardRules = {
   noFutureCharacters:     true,
   noSelfAddPlot:          true,
   noDangerousTone:        true,
-  noAddScene:             true,  // 👈 MỚI
-  noSkipNoAvoid:          true,  // 👈 MỚI
-  requireDetailedSexScene: true, // 👈 MỚI
+  noAddScene:             true,
+  noSkipNoAvoid:          true,
+  requireDetailedSexScene: true,
+  // 👈 3 RULE MỚI
+  noThematicClosingLine:  true,  // Cấm câu tổng kết/tuyên ngôn giữa chừng
+  noSparseDialogue:       true,  // Bắt buộc đối thoại tối thiểu 30%
+  requireBodyDetail:      true,  // Bắt buộc miêu tả cơ thể khi nhân vật xuất hiện
 };
 
 // ─── DEFAULT LEXICON ────────────────────────────────────────────────────────
 export const DEFAULT_LEXICON: Required<SexualLexicon> = {
-  // Bộ phận cơ thể
   maleParts: [
     'dương vật', 'tinh hoàn', 'đầu khấc', 'côn thịt', 'lỗ tiểu', 'lông mao',
   ],
@@ -52,12 +55,10 @@ export const DEFAULT_LEXICON: Required<SexualLexicon> = {
     'lông mu', 'hậu môn', 'quầng núm vú', 'mông', 'háng', 'bẹn',
     'môi âm đạo', 'mép âm đạo',
   ],
-  // Hành động - 👈 ĐÃ SỬA: thêm chú thích cho "cưỡi"
   actions: [
     'thao', 'dập', 'nhấp', 'phang',
     'cưỡi (tùy tình huống: nữ ở trên, chủ động di chuyển; nếu nam ở trên thì dùng đè/ấn/úp sấp)',
   ],
-  // 👈 ĐÃ SỬA: dominantActions có chú thích rõ tư thế
   dominantActions: [
     'bế lên',
     'bế mặt đối mặt',
@@ -68,20 +69,16 @@ export const DEFAULT_LEXICON: Required<SexualLexicon> = {
     'úp sấp (nam trên, từ phía sau)',
     'cưỡi (nữ trên, chủ động nhún/dập — dùng khi nữ nằm/ngồi trên nam)',
   ],
-  // Trạng thái
   states: [
     'to căng', 'căng vễnh', 'to bự', 'căng phồng', 'ướt đẫm', 'bê bết',
     'ước đẫm', 'ướt át', 'sưng húp', 'sưng tấy', 'sưng đỏ', 'căng mộng',
     'nhoe nhoét', 'căng tràng', 'tung tóe',
   ],
   otherStates: [
-    'tung tóe', 'bê bếch', 'bắn thành thia', 'bắn thành dòng', 'chảy thành dòng',
+    'tung tóe', 'bê bết', 'bắn thành thia', 'bắn thành dòng', 'chảy thành dòng',
   ],
-  // Tiếng rên & âm thanh
   moanSounds: [
-    // Từ đơn (bắt buộc dùng)
     'a', 'ứ', 'ôi', 'ối', 'ahh', 'umm',
-    // Mẫu nhịp điệu (tham khảo, KHÔNG copy nguyên)
     'đừng... đừng mà... to quá... ahh...',
     'ôi... chết... chết mất... to.. to quá...',
     'ôi không không... to quá... tét... nó tét ra mất...',
@@ -193,7 +190,6 @@ const RULE_DEFS: RuleDef[] = [
     desc: 'AI tự sáng tạo thêm biến cố, twist, hoặc tình huống ngoài mệnh lệnh tác giả.',
     aiPrompt: '🚨 CHỈ viết đúng những gì mệnh lệnh tác giả yêu cầu. KHÔNG tự thêm biến cố mới, twist bất ngờ, tình tiết phụ, hay bất kỳ yếu tố nào không được đề cập trong mệnh lệnh. Sáng tạo trong phạm vi mệnh lệnh, không mở rộng cốt truyện tự ý.',
   },
-  // 👈 MỚI: Cấm tự thêm cảnh mới
   {
     key: 'noAddScene',
     group: 'Cấu trúc cảnh',
@@ -201,6 +197,15 @@ const RULE_DEFS: RuleDef[] = [
     label: 'Cấm tự thêm cảnh mới',
     desc: 'AI hay tự mở cảnh mới (chuyển sang phòng khác, gặp người khác, rời khỏi vị trí hiện tại) khi chưa được yêu cầu.',
     aiPrompt: 'TUYỆT ĐỐI KHÔNG tự chuyển cảnh, không mở khung cảnh mới, không đưa nhân vật di chuyển sang địa điểm khác nếu mệnh lệnh không yêu cầu. Giữ nguyên không gian và bối cảnh hiện tại.',
+  },
+  // 👈 RULE MỚI: Cấm câu tổng kết/tuyên ngôn
+  {
+    key: 'noThematicClosingLine',
+    group: 'Cấu trúc cảnh',
+    severity: 'high',
+    label: 'Cấm câu tổng kết/tuyên ngôn giữa chừng',
+    desc: 'AI viết câu kết thúc mang tính "định hướng tương lai" hoặc tổng kết chủ đề khi chưa đến cuối cảnh.',
+    aiPrompt: 'TUYỆT ĐỐI KHÔNG viết câu mang tính tổng kết chủ đề, định hướng tương lai, tuyên ngôn kiểu: "và thế là...", "từ nay...", "một trang mới...", "mọi thứ đã thay đổi...", "cuộc chiến bắt đầu từ đây...", "định mệnh đã an bài..." — trong khi cảnh vẫn đang diễn ra. Dừng ở hành động cụ thể, không kết luận hay mở màn cho tương lai.',
   },
 
   // ── Nhóm: Nhân vật ──
@@ -286,9 +291,26 @@ const RULE_DEFS: RuleDef[] = [
     desc: 'AI dùng câu từ mang cảm giác nguy hiểm, đe dọa bất thường, tạo không khí tiêu cực không cần thiết.',
     aiPrompt: '🚨 KHÔNG sử dụng câu từ mang cảm giác nguy hiểm, đe dọa, hoặc xáo rỗng không cần thiết. Giữ giọng văn ổn định, không gây hoang mang cho người đọc. KHÔNG viết theo hướng đe dọa, gây cấn bất thường, hoặc tạo bầu không khí tiêu cực ngoài dự kiến.',
   },
+  // 👈 RULE MỚI: Bắt buộc đối thoại tối thiểu 30%
+  {
+    key: 'noSparseDialogue',
+    group: 'Nội dung & văn phong',
+    severity: 'high',
+    label: 'Bắt buộc đối thoại tối thiểu 30%',
+    desc: 'AI viết quá nhiều miêu tả, thiếu đối thoại làm câu chuyện khô cứng, thiếu sinh khí.',
+    aiPrompt: 'BẮT BUỘC đối thoại chiếm tối thiểu 30% tổng dung lượng đoạn viết. Mỗi nhân vật chính trong cảnh phải có ít nhất 3-5 câu thoại thể hiện tính cách. Thoại phải tự nhiên, đúng giọng điệu nhân vật, không viết thoại nền tẻ nhạt. Lồng đối thoại xen kẽ hành động và miêu tả nội tâm.',
+  },
+  // 👈 RULE MỚI: Bắt buộc miêu tả cơ thể khi nhân vật xuất hiện
+  {
+    key: 'requireBodyDetail',
+    group: 'Nội dung & văn phong',
+    severity: 'medium',
+    label: 'Bắt buộc miêu tả cơ thể khi nhân vật xuất hiện',
+    desc: 'AI thiếu miêu tả ngoại hình cơ thể khi nhân vật xuất hiện hoặc có hành động, gây khô khan.',
+    aiPrompt: 'Mỗi lần nhân vật xuất hiện hoặc có hành động quan trọng: PHẢI có 1-2 câu miêu tả cơ thể/thân hình (dáng vóc, tư thế, cử chỉ, chuyển động cơ thể) gắn với khoảnh khắc đó. Không cần dài dòng mỗi lần, nhưng phải có ít nhất 1 chi tiết cụ thể (VD: thân hình rắn rỏi, bàn tay to, bước đi nhẹ nhàng, vai rộng, vòng eo thon...). KHÔNG viết kiểu "hắn đứng đó" mà không kèm miêu tả cơ thể.',
+  },
 
-  // ── Nhóm: Cảnh H (MỚI) ──
-  // 👈 MỚI: Cấm viết tránh / nhảy cóc cảnh H
+  // ── Nhóm: Cảnh H ──
   {
     key: 'noSkipNoAvoid',
     group: 'Cảnh H',
@@ -297,7 +319,6 @@ const RULE_DEFS: RuleDef[] = [
     desc: 'AI hay né cảnh H bằng cách tóm tắt "đêm hôm đó", "một lúc lâu sau", hoặc nhảy sang sáng hôm sau.',
     aiPrompt: '🚨 TUYỆT ĐỐI KHÔNG viết giảm, viết tránh, tóm tắt, hoặc nhảy cóc qua cảnh quan hệ tình dục. Phải viết đầy đủ từng chi tiết: bộ phận sinh dục, hành động, cảm giác, tiếng rên, âm thanh, biểu cảm. Cấm dùng "sau đó", "đêm hôm đó", "một lúc lâu sau", "sáng hôm sau" để bỏ qua cảnh H. Viết liên tục, từng giây từng phút của cuộc giao hợp.',
   },
-  // 👈 MỚI: Bắt buộc viết chi tiết cảnh H
   {
     key: 'requireDetailedSexScene',
     group: 'Cảnh H',
@@ -331,7 +352,7 @@ const GROUP_COLORS: Record<string, string> = {
   'Cấu trúc cảnh':        'text-blue-400 border-blue-800/40 bg-blue-950/20',
   'Nhân vật':             'text-purple-400 border-purple-800/40 bg-purple-950/20',
   'Nội dung & văn phong': 'text-amber-400 border-amber-800/40 bg-amber-950/20',
-  'Cảnh H':               'text-pink-400 border-pink-800/40 bg-pink-950/20', // 👈 MỚI
+  'Cảnh H':               'text-pink-400 border-pink-800/40 bg-pink-950/20',
   'Xưng hô & nhất quán':  'text-emerald-400 border-emerald-800/40 bg-emerald-950/20',
 };
 
@@ -414,7 +435,12 @@ const LORE_CATEGORIES = [
 ];
 
 // ─── PRESET GUIDELINES ──────────────────────────────────────────────────────
+// 👈 SỬA: giới hạn phạm vi "linh hoạt sáng tạo"
 const REFERENCE_GUIDELINES = `📝 HƯỚNG DẪN THAM KHẢO - LINH HOẠT, KHÔNG RẬP KHUÔN:
+
+⚠️ QUAN TRỌNG: Phần dưới đây là HƯỚNG DẪN VỀ VĂN PHONG và CÁCH DIỄN ĐẠT, không phải quy tắc cốt truyện.
+- ✅ Linh hoạt trong: cách hành văn, miêu tả cảm xúc, góc nhìn, nhịp điệu câu chữ, biến tấu từ ngữ.
+- ❌ KHÔNG linh hoạt trong: cốt truyện, nhân vật, bối cảnh, mốc thời gian — các hard rule vẫn có hiệu lực tuyệt đối.
 
 🏞️ MÔI TRƯỜNG & KHÔNG GIAN:
 - Miêu tả không gian, thời tiết, ánh sáng, âm thanh, mùi hương
@@ -477,7 +503,8 @@ const REFERENCE_GUIDELINES = `📝 HƯỚNG DẪN THAM KHẢO - LINH HOẠT, KH�
 - CẤM ẩn dụ sáo rỗng: "khe suối", "đóa hoa xuân", "vùng cấm địa", "nơi thầm kín".
 - Viết nhiều, đẩy đủ, tả rõ bộ phận sinh dục, tả rõ cảnh quan hệ tình dục.
 
-📌 LƯU Ý: Đây là HƯỚNG DẪN THAM KHẢO, không phải quy tắc cứng nhắc. AI có thể LINH HOẠT SÁNG TẠO để tránh rập khuôn, giữ văn phong tự nhiên, hấp dẫn và phù hợp với từng cảnh cụ thể.`;
+📌 LƯU Ý: Đây là HƯỚNG DẪN THAM KHẢO về VĂN PHONG và DIỄN ĐẠT, không phải quy tắc cốt truyện. 
+Các hard rule về cốt truyện, nhân vật, bối cảnh vẫn có hiệu lực tuyệt đối.`;
 
 const FORBIDDEN_GUIDELINES = `🚫 DANH SÁCH CẤM KỴ BỔ SUNG:
 
@@ -525,6 +552,17 @@ function LoreSection({
 
   const handleSave = () => {
     if (!form.title.trim() || !form.content.trim()) return;
+    
+    // Check duplicate title
+    const exists = loreEntries.some(e => 
+      e.title.toLowerCase() === form.title.toLowerCase() && 
+      e.id !== editingId
+    );
+    if (exists) {
+      alert('⚠️ Tiêu đề đã tồn tại! Vui lòng đặt tên khác.');
+      return;
+    }
+
     updateState((prev) => {
       if (!prev.rules.loreEntries) prev.rules.loreEntries = [];
       if (editingId) {
@@ -913,7 +951,6 @@ export default function Page4Rules({ state, updateState, onNavigate }: Page4Rule
     setGuideAdded(true);
   };
 
-  // ─── SỬA: removeGuide dùng marker an toàn ─────────────────────────────
   const removeGuide = () => {
     if (confirm('Xóa hướng dẫn tham khảo?')) {
       const current = rules.mandatory || '';
@@ -968,7 +1005,6 @@ export default function Page4Rules({ state, updateState, onNavigate }: Page4Rule
       </div>
 
       <div className="space-y-6">
-
         {/* ─── LexiconEditor ──────────────────────────────────────────────── */}
         <LexiconEditor state={state} updateState={updateState} />
 

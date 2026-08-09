@@ -101,6 +101,7 @@ export default function Page1Start({ state, updateState, onNavigate, onEnterNewW
   const [keysExpanded, setKeysExpanded] = useState(false);
   const [showAnalyzer, setShowAnalyzer] = useState(false);
   const [testStatus, setTestStatus]   = useState<Record<string, { loading: boolean; ok?: boolean; msg?: string }>>({});
+  const [confirmClearAll, setConfirmClearAll] = useState(false);
 
   const [modelsLoading, setModelsLoading] = useState(false);
   const [fetchedModels, setFetchedModels] = useState<string[]>([]);
@@ -112,7 +113,6 @@ export default function Page1Start({ state, updateState, onNavigate, onEnterNewW
     (acc, c) => acc + (c.content?.split(/\s+/).filter(Boolean).length || 0), 0
   );
 
-  // ─── STATS ─────────────────────────────────────────────────────────────────
   const totalCharacters = state.characters?.length || 0;
   const totalChapters = state.chapters?.length || 0;
   const totalEvents = state.storyEvents?.length || 0;
@@ -130,7 +130,6 @@ export default function Page1Start({ state, updateState, onNavigate, onEnterNewW
 
   const isLarge = storageInfo.totalBytes > 5 * 1024 * 1024;
 
-  // ─── HANDLE: Export Project ──────────────────────────────────────────────
   const handleExportProject = () => {
     const data = JSON.stringify(state, null, 2);
     const blob = new Blob([data], { type: 'application/json' });
@@ -142,15 +141,13 @@ export default function Page1Start({ state, updateState, onNavigate, onEnterNewW
     URL.revokeObjectURL(url);
   };
 
-  // ─── HANDLE: Clear Data ──────────────────────────────────────────────────
-  const handleClearData = () => {
-    if (confirm('⚠️ Xóa toàn bộ dữ liệu? Hành động này không thể hoàn tác!')) {
-      localStorage.clear();
-      window.location.reload();
-    }
+  const handleClearData = () => setConfirmClearAll(true);
+
+  const runClearAll = () => {
+    localStorage.clear();
+    window.location.reload();
   };
 
-  // ─── HANDLE: Import JSON ─────────────────────────────────────────────────
   const handleJsonUpload = (e: React.ChangeEvent<HTMLInputElement>) => {
     const file = e.target.files?.[0];
     if (!file) return;
@@ -208,7 +205,6 @@ export default function Page1Start({ state, updateState, onNavigate, onEnterNewW
     reader.readAsText(file);
   };
 
-  // ─── HANDLE: Fanfiction Upload ──────────────────────────────────────────
   const handleFanfictionUpload = (e: React.ChangeEvent<HTMLInputElement>) => {
     const file = e.target.files?.[0];
     if (!file) return;
@@ -225,7 +221,6 @@ export default function Page1Start({ state, updateState, onNavigate, onEnterNewW
     reader.readAsText(file);
   };
 
-  // ─── HANDLE: Add Key ─────────────────────────────────────────────────────
   const handleAddKey = () => {
     if (!newKey.trim()) { alert('Vui lòng nhập API Key'); return; }
     const keyObj: ApiKeyConfig = {
@@ -303,8 +298,6 @@ export default function Page1Start({ state, updateState, onNavigate, onEnterNewW
 
   return (
     <div className="max-w-4xl mx-auto py-3 px-4 space-y-3">
-
-      {/* ─── HEADER ─── */}
       <div className="text-center">
         <div className="inline-flex items-center gap-2 mb-1">
           <div className="p-1.5 bg-red-950/40 border border-red-500/30 rounded-lg">
@@ -319,7 +312,6 @@ export default function Page1Start({ state, updateState, onNavigate, onEnterNewW
         </p>
       </div>
 
-      {/* ─── LƯU Ý ─── */}
       <div className="p-3 bg-amber-950/20 border border-amber-800/40 rounded-xl text-[11px] text-amber-300 leading-relaxed flex items-start gap-2">
         <AlertCircle className="w-4 h-4 shrink-0 mt-0.5" />
         <div>
@@ -329,7 +321,6 @@ export default function Page1Start({ state, updateState, onNavigate, onEnterNewW
         </div>
       </div>
 
-      {/* ─── STATS CARDS ─── */}
       <div className="grid grid-cols-2 md:grid-cols-4 gap-2">
         <div className="bg-neutral-900/60 border border-neutral-800 rounded-xl p-3 text-center">
           <p className="text-xl font-bold text-gray-200">{totalCharacters}</p>
@@ -349,7 +340,6 @@ export default function Page1Start({ state, updateState, onNavigate, onEnterNewW
         </div>
       </div>
 
-      {/* ─── ĐANG VIẾT ─── */}
       {hasProject && (
         <button
           onClick={() => onNavigate('compose')}
@@ -374,7 +364,6 @@ export default function Page1Start({ state, updateState, onNavigate, onEnterNewW
         </button>
       )}
 
-      {/* ─── 4 NÚT CHỨC NĂNG ─── */}
       <div className="grid grid-cols-2 gap-2.5">
         <button
           onClick={onEnterNewWorld}
@@ -440,7 +429,6 @@ export default function Page1Start({ state, updateState, onNavigate, onEnterNewW
         </div>
       </div>
 
-      {/* ─── DUNG LƯỢNG ─── */}
       {(state.characters.length > 0 || state.chapters.length > 0) && (
         <div className={`rounded-xl border p-3 flex items-center justify-between gap-3 ${
           isLarge ? 'bg-amber-950/20 border-amber-800/40' : 'bg-neutral-900/60 border-neutral-800'
@@ -467,7 +455,6 @@ export default function Page1Start({ state, updateState, onNavigate, onEnterNewW
         </div>
       )}
 
-      {/* ─── HÀNG NGANG QUẢN LÝ DỮ LIỆU ─── */}
       <div className="flex flex-wrap items-center justify-between gap-2 p-3 bg-neutral-900/40 border border-neutral-800 rounded-xl">
         <div className="flex items-center gap-2">
           <Database className="w-3.5 h-3.5 text-gray-500" />
@@ -492,7 +479,6 @@ export default function Page1Start({ state, updateState, onNavigate, onEnterNewW
         </div>
       </div>
 
-      {/* ─── 4 NÚT ĐIỀU HƯỚNG NHANH ─── */}
       <div className="grid grid-cols-2 md:grid-cols-4 gap-2">
         <button
           onClick={() => onNavigate('idea')}
@@ -524,7 +510,6 @@ export default function Page1Start({ state, updateState, onNavigate, onEnterNewW
         </button>
       </div>
 
-      {/* ─── API KEYS ─── */}
       <div className="bg-neutral-900/80 border border-neutral-800 rounded-xl overflow-hidden">
         <button
           onClick={() => setKeysExpanded(!keysExpanded)}
@@ -768,7 +753,6 @@ export default function Page1Start({ state, updateState, onNavigate, onEnterNewW
         )}
       </div>
 
-      {/* ─── FOOTER ─── */}
       <div className="text-center pt-2 border-t border-neutral-800/50">
         <p className="text-[9px] text-gray-700">
           StoryCraft Pro v2.0 · Dữ liệu lưu trữ cục bộ ·
@@ -778,13 +762,28 @@ export default function Page1Start({ state, updateState, onNavigate, onEnterNewW
         </p>
       </div>
 
-      {/* ─── FANFIC ANALYZER ─── */}
       {showAnalyzer && (
         <FanficAnalyzer
           state={state}
           updateState={updateState}
           onClose={() => setShowAnalyzer(false)}
         />
+      )}
+
+      {confirmClearAll && (
+        <div className="fixed inset-0 z-[60] flex items-center justify-center p-4">
+          <div className="absolute inset-0 bg-black/75 backdrop-blur-sm" onClick={() => setConfirmClearAll(false)} />
+          <div className="relative w-full max-w-sm bg-neutral-900 border border-red-900/50 rounded-2xl p-5 space-y-4 shadow-2xl">
+            <h3 className="text-sm font-bold text-gray-100">Xóa toàn bộ dữ liệu</h3>
+            <p className="text-xs text-gray-400 leading-relaxed">
+              ⚠️ Xóa <strong>TẤT CẢ</strong> truyện, ảnh, backup, API key đã lưu trong trình duyệt này. Không thể hoàn tác!
+            </p>
+            <div className="flex justify-end gap-2">
+              <button onClick={() => setConfirmClearAll(false)} className="px-3 py-1.5 text-xs text-gray-400 hover:bg-neutral-800 rounded-lg">Hủy</button>
+              <button onClick={runClearAll} className="px-3 py-1.5 text-xs bg-red-900/70 border border-red-700 text-red-200 hover:bg-red-800/80 rounded-lg font-semibold">Xóa hết</button>
+            </div>
+          </div>
+        </div>
       )}
     </div>
   );

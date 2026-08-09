@@ -139,6 +139,7 @@ export interface Character {
   backStory: string;
   currentStatus: string;
   additionalInfo: string;
+  currentData?: string; // Dữ liệu hiện hữu — cập nhật theo diễn biến, KHÔNG ghi đè hồ sơ gốc
   relationships: Relationship[];
   images: CharacterImage[];
   timeline?: CharacterTimelineEntry[];
@@ -159,12 +160,13 @@ export interface WorldEntity {
   description: string;
   firstAppearanceOrder?: number;
   additionalInfo?: string;
+  currentData?: string; // Dữ liệu hiện hữu — cập nhật theo diễn biến, KHÔNG ghi đè mô tả gốc
   timeline?: CharacterTimelineEntry[];
   speciesTraits?: SpeciesTraits;
 }
 
 // ──────────────────────────────────────────────────────────────────────────────
-// 8. CẤU HÌNH TRUYỆN (NovelConfig) - CẬP NHẬT
+// 8. CẤU HÌNH TRUYỆN (NovelConfig)
 // ──────────────────────────────────────────────────────────────────────────────
 export interface NovelConfig {
   title: string;
@@ -183,7 +185,6 @@ export interface NovelConfig {
     order: number;
     label: string;
   };
-  // 👈 SỬA: Thêm 'fresh' vào writeMode
   writeMode?: 'continue' | 'rewrite' | 'scene' | 'reborn' | 'fresh';
   sourceSceneText?: string;
   rebornCharacterId?: string;
@@ -224,6 +225,10 @@ export interface HardRules {
   noAddScene: boolean;
   noSkipNoAvoid: boolean;
   requireDetailedSexScene: boolean;
+  // 👇 3 RULE MỚI
+  noThematicClosingLine: boolean;  // Cấm câu tổng kết/tuyên ngôn giữa chừng
+  noSparseDialogue: boolean;       // Bắt buộc đối thoại tối thiểu 30%
+  requireBodyDetail: boolean;      // Bắt buộc miêu tả cơ thể khi nhân vật xuất hiện
 }
 
 // ──────────────────────────────────────────────────────────────────────────────
@@ -265,7 +270,7 @@ export interface NovelState {
 }
 
 // ──────────────────────────────────────────────────────────────────────────────
-// 14. DEFAULT STATE
+// 14. DEFAULT STATE - CẬP NHẬT VỚI 3 RULE MỚI
 // ──────────────────────────────────────────────────────────────────────────────
 export const defaultNovelState: NovelState = {
   config: {
@@ -314,6 +319,10 @@ export const defaultNovelState: NovelState = {
       noAddScene: false,
       noSkipNoAvoid: false,
       requireDetailedSexScene: false,
+      // 👇 3 RULE MỚI - MẶC ĐỊNH FALSE
+      noThematicClosingLine: false,
+      noSparseDialogue: false,
+      requireBodyDetail: false,
     },
     loreEntries: [],
     sexualLexicon: undefined,
@@ -386,7 +395,7 @@ export function validateProjectQuality(state: NovelState): {
 }
 
 // ──────────────────────────────────────────────────────────────────────────────
-// 18. HELPER: Lấy danh sách rule đang bật
+// 18. HELPER: Lấy danh sách rule đang bật - CẬP NHẬT
 // ──────────────────────────────────────────────────────────────────────────────
 export function getActiveRules(hardRules: HardRules): string[] {
   const active: string[] = [];
@@ -411,6 +420,10 @@ export function getActiveRules(hardRules: HardRules): string[] {
     noAddScene: 'Cấm tự thêm cảnh mới',
     noSkipNoAvoid: 'Cấm lảng tránh, né tránh cảnh H',
     requireDetailedSexScene: 'Bắt buộc viết chi tiết cảnh H',
+    // 👇 3 RULE MỚI
+    noThematicClosingLine: 'Cấm câu tổng kết/tuyên ngôn giữa chừng',
+    noSparseDialogue: 'Bắt buộc đối thoại tối thiểu 30%',
+    requireBodyDetail: 'Bắt buộc miêu tả cơ thể khi nhân vật xuất hiện',
   };
   
   Object.entries(hardRules).forEach(([key, value]) => {

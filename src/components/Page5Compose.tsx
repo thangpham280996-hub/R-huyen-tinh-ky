@@ -7,7 +7,7 @@ import {
 } from 'lucide-react';
 import { buildHardRulesPrompt, buildLexiconPrompt } from './Page4Rules';
 import { NovelState, Chapter, Character, filterByCurrentPoint } from '../types';
-import { callApi } from '../utils/api';
+import { callApiWithRetry } from '../utils/api';
 
 interface Page5ComposeProps {
   state: NovelState;
@@ -49,7 +49,6 @@ const QUICK_ANALYSIS = [
   { icon: '❤️', label: 'Romance', prompt: 'Phân tích chemistry và tiến triển tình cảm giữa các cặp nhân vật: có tự nhiên không, nhịp độ có hợp lý không, điểm nào cần thêm tension?' },
 ];
 
-// ✅ BƯỚC 1: Thêm 'fresh' vào đầu danh sách
 const WRITE_MODES = [
   { v: 'fresh' as const, label: '✨ Viết mới' },
   { v: 'continue' as const, label: 'Tiếp tục' },
@@ -66,7 +65,16 @@ const MAX_LORE_ENTRIES = 5;
 const MAX_REFERENCE_LENGTH = 500;
 const MAX_CHAT_CONTEXT = 2000;
 
-// ─── splitIntoScenes cải thiện ─────────────────────────────────────────────
+// ─── HÀM LẤY TÓM TẮT CHƯƠNG TRƯỚC ────────────────────────────────────────
+function getPrevChapterSummary(prevChapter: Chapter | null, storyEvents: NovelState['storyEvents']): string {
+  if (!prevChapter) return '';
+  const summary = (storyEvents || []).find(
+    e => e.chapterId === prevChapter.id && e.title === 'Tóm tắt'
+  );
+  return summary?.content || '';
+}
+
+// ─── splitIntoScenes ──────────────────────────────────────────────────────
 function splitIntoScenes(text: string): { label: string; content: string }[] {
   if (!text || text.trim().length < 50) return [];
   const scenes: { label: string; content: string }[] = [];
@@ -138,7 +146,7 @@ function formatFileSize(bytes: number): string {
   return `${(bytes / (1024 * 1024)).toFixed(2)} MB`;
 }
 
-// ─── RÚT GỌN: buildSystemInstruction ──────────────────────────────────────
+// ─── buildSystemInstruction ──────────────────────────────────────────────
 export function buildSystemInstruction(state: NovelState): string {
   const { config, characters, worldEntities, rules } = state;
   const currentOrder = config.currentStoryPoint?.order;
@@ -147,6 +155,7 @@ export function buildSystemInstruction(state: NovelState): string {
   const visibleWorldEntities = filterByCurrentPoint(worldEntities, currentOrder);
   const visibleCharIds = new Set(visibleCharacters.map(c => c.id));
 
+  // ✅ charSummary dạng "nguyên liệu cần chuyển hóa" - không để AI copy y nguyên
   const charSummary = visibleCharacters.slice(0, 50).map(c => {
     const rels = (c.relationships || [])
       .filter(r => visibleCharIds.has(r.targetCharacterId))
@@ -159,9 +168,13 @@ export function buildSystemInstruction(state: NovelState): string {
     const appearance = c.appearance?.slice(0, 60) || '';
     const abilities = (c.abilities || []).slice(0, 3).map(a => `${a.name}(${a.type})`).join(', ');
     const fashion = (c.fashionStyles || []).slice(0, 2).map(f => `${f.name}[${f.context}]`).join(', ');
+    const currentData = c.currentData?.slice(0, 150) || '';
     
-    return `${c.name}(${c.role},${c.gender}): ${personality}${appearance ? `, ${appearance}` : ''}${abilities ? `, kỹ năng:${abilities}` : ''}${fashion ? `, trang phục:${fashion}` : ''}${rels ? `, qh:${rels}` : ''}`;
-  }).join('\n');
+    return `${c.name}(${c.role},${c.gender})
+  ⚠️ THAM KHẢO — KHÔNG CHÉP NGUYÊN: ${personality ? `Tính cách: ${personality}` : ''} ${appearance ? `Ngoại hình: ${appearance}` : ''}
+  → KHI VIẾT: diễn giải lại bằng câu chữ khác, lồng ghép vào hành động/đối thoại, không dùng lại cụm từ y hệt.
+  ${abilities ? `Kỹ năng:${abilities}` : ''}${fashion ? `, trang phục:${fashion}` : ''}${rels ? `, qh:${rels}` : ''}${currentData ? ` | HIỆN TẠI: ${currentData}` : ''}`;
+  }).join('\n\n');
 
   const storyEvents = (state.storyEvents || [])
     .filter(e => currentOrder === undefined || e.order <= currentOrder)
@@ -180,7 +193,7 @@ export function buildSystemInstruction(state: NovelState): string {
 
   let refSection = '';
   if (config.referenceFileContent) {
-    refSection = `\n[THAM KHẢO]\n${config.referenceFileContent.substring(0, MAX_REFERENCE_LENGTH)}...`;
+    refSection = `\n[THAM KHẢO VĂN PHONG — CHỈ để học cách hành văn/giọng kể, TUYỆT ĐỐI KHÔNG lấy chi tiết, tình tiết, bối cảnh, thời gian, địa điểm trong đoạn dưới đây để đưa vào bài viết. Bài viết PHẢI bám theo [ĐANG VIẾT] và [MỆNH LỆNH] trong prompt chính]\n${config.referenceFileContent.substring(0, MAX_REFERENCE_LENGTH)}...`;
   }
   if (config.originalNarrativeVoice) {
     refSection += `\n\n[GIỌNG KỂ GỐC]\n${config.originalNarrativeVoice.slice(0, 300)}`;
@@ -192,7 +205,8 @@ export function buildSystemInstruction(state: NovelState): string {
 ⛔ RÀNG BUỘC BỔ SUNG:
 - CHỈ viết theo mệnh lệnh, KHÔNG tự thêm nhân vật/tình tiết
 - KHÔNG nhắc nhân vật chưa xuất hiện: ${existingCharNames}
-- Mô tả nhân vật/thế lực bên dưới là TÀI LIỆU THAM KHẢO, KHÔNG PHẢI cụm từ để chép lại nguyên văn. TUYỆT ĐỐI không lặp lại đúng nguyên cụm mô tả (ví dụ "mỹ nhân bác sĩ") nhiều lần trong bài viết — mỗi lần nhắc tới ngoại hình/thân phận nhân vật, hãy diễn đạt lại bằng câu chữ khác, góc nhìn khác, hoặc lồng ghép tự nhiên vào hành động/đối thoại thay vì lặp thành nhãn dán cố định.`;
+- Mô tả nhân vật/thế lực bên dưới là TÀI LIỆU THAM KHẢO, KHÔNG PHẢI cụm từ để chép lại nguyên văn. TUYỆT ĐỐI không lặp lại đúng nguyên cụm mô tả (ví dụ "mỹ nhân bác sĩ") nhiều lần trong bài viết — mỗi lần nhắc tới ngoại hình/thân phận nhân vật, hãy diễn đạt lại bằng câu chữ khác, góc nhìn khác, hoặc lồng ghép tự nhiên vào hành động/đối thoại thay vì lặp thành nhãn dán cố định.
+- TUYỆT ĐỐI KHÔNG tự ý đổi bối cảnh thời gian trong ngày, địa điểm, hoạt động nhân vật đang làm so với đoạn văn được cung cấp trong prompt. Ví dụ: nếu đoạn trước đang ở buổi sáng vừa thức dậy, đoạn viết tiếp PHẢI vẫn là buổi sáng đó — không được tự chuyển thành buổi tối, không tự chèn mô-típ "sau một ngày dài/mệt mỏi" trừ khi mệnh lệnh yêu cầu rõ.`;
 
   const timelineNotice = currentOrder !== undefined
     ? `\n[MỐC HIỆN TẠI]: ${config.currentStoryPoint?.label || `#${currentOrder}`}\nCHỈ dùng thông tin ĐẾN mốc này.`
@@ -201,7 +215,8 @@ export function buildSystemInstruction(state: NovelState): string {
   const worldSummary = visibleWorldEntities.map(w => {
     const traits = w.speciesTraits;
     const extra = traits ? ` [${traits.threatLevel}, yếu:${traits.weakness?.slice(0, 20)}, ${traits.abilities?.length || 0} chiêu]` : '';
-    return `${w.name}(${w.type}): ${w.description.slice(0, 60)}${extra}`;
+    const currentData = w.currentData?.slice(0, 100) || '';
+    return `${w.name}(${w.type}): ${w.description.slice(0, 60)}${extra}${currentData ? ` | HIỆN TẠI: ${currentData}` : ''}`;
   }).join('\n') || 'Chưa có';
 
   return `Truyện: ${config.title || 'Chưa đặt tên'} - ${config.genres.join(', ')}
@@ -228,8 +243,7 @@ ${refSection}
 ${lexiconBlock}`;
 }
 
-// ─── RÚT GỌN: buildWritePrompt ────────────────────────────────────────────
-// ✅ BƯỚC 3: Cập nhật type và default
+// ─── buildWritePrompt ────────────────────────────────────────────────────
 function buildWritePrompt(
   activeChapter: Chapter,
   allChapters: Chapter[],
@@ -243,9 +257,12 @@ function buildWritePrompt(
   const chIdx = allChapters.findIndex(c => c.id === activeChapter.id);
 
   const prevChapter = chIdx > 0 ? allChapters[chIdx - 1] : null;
+  // ✅ CHỈ CẮT CHƯƠNG TRƯỚC - dùng MAX_TAIL_LENGTH
   const prevTail = prevChapter?.content?.slice(-MAX_TAIL_LENGTH) || '';
 
-  const currentTail = activeChapter.content.trim().slice(-MAX_TAIL_LENGTH);
+  // ✅ SỬA LỖI 1: currentTail GIỮ NGUYÊN TOÀN BỘ nội dung chương đang viết
+  // Không cắt, vì AI cần đọc toàn bộ để viết tiếp đúng mạch
+  const currentTail = activeChapter.content.trim();
 
   const appeared = getAppearedCharacters(
     allChapters.slice(0, chIdx + 1),
@@ -258,9 +275,12 @@ function buildWritePrompt(
   const [minW, maxW] = targetRange;
   let prompt = '';
 
-  // ✅ BƯỚC 4: Thêm block xử lý 'fresh'
   if (writeMode === 'fresh') {
-    prompt += `🆕 VIẾT MỚI CHƯƠNG: Viết nội dung cho chương này từ đầu. Không tiếp nối đoạn dở nào trong chương hiện tại. Dựa vào dàn ý và mệnh lệnh bên dưới.\n\n`;
+    if (activeChapter.content.trim()) {
+      prompt += `🆕 VIẾT TIẾP CHƯƠNG: Chương đã có nội dung, hãy viết TIẾP nối liền mạch, logic với đoạn dở bên dưới. TUYỆT ĐỐI không lặp lại nội dung cũ, không viết lại từ đầu.\n\n`;
+    } else {
+      prompt += `🆕 VIẾT MỚI CHƯƠNG: Viết nội dung cho chương này từ đầu. Dựa vào dàn ý và mệnh lệnh bên dưới.\n\n`;
+    }
   } else if (writeMode === 'scene' && sourceSceneText.trim()) {
     prompt += `CẢNH GỐC:\n${sourceSceneText.trim().slice(0, 1500)}\n\nViết TIẾP từ đây, nội dung MỚI.\n\n`;
   } else if (writeMode === 'rewrite' && sourceSceneText.trim()) {
@@ -269,20 +289,50 @@ function buildWritePrompt(
     prompt += `TRỌNG SINH: ${rebornCharacterName || 'NV'} biết trước:\n${sourceSceneText.trim().slice(0, 2000)}\n\n`;
   }
 
-  // ✅ BƯỚC 5: Phân biệt prevTail và currentTail theo mode
-  // fresh và continue đều cần biết kết chương trước để liên kết câu chuyện
-  if (prevTail) {
-    prompt += `[CHƯƠNG TRƯỚC - KẾT]\n${prevTail}\n\n`;
+  const prevSummary = getPrevChapterSummary(prevChapter, state.storyEvents);
+  if (prevSummary) {
+    prompt += `[TÓM TẮT CHƯƠNG TRƯỚC - MẠCH TRUYỆN]\n${prevSummary}\n\n`;
   }
 
-  // Chỉ continue cần tiếp nối đoạn dở trong chương hiện tại
-  if (writeMode === 'continue' && currentTail) {
-    prompt += `[ĐANG VIẾT - TIẾP NGAY SAU]\n${currentTail}\n\n`;
+  if (prevTail) {
+    prompt += `[CHƯƠNG TRƯỚC - KẾT, để nối văn phong]\n${prevTail}\n\n`;
+  }
+
+  // ✅ SỬA: currentTail là TOÀN BỘ nội dung chương đang viết (đã fix ở trên)
+  if ((writeMode === 'continue' || writeMode === 'fresh') && currentTail) {
+    prompt += `[ĐANG VIẾT - TOÀN BỘ NỘI DUNG HIỆN TẠI]\n${currentTail}\n\n`;
+    prompt += `⚠️ BẮT BUỘC GIỮ BỐI CẢNH: Đoạn viết tiếp PHẢI cùng thời điểm (buổi sáng/trưa/chiều/tối — lấy đúng theo đoạn trên), cùng địa điểm, cùng hoạt động nhân vật đang làm với đoạn "ĐANG VIẾT" ở trên. TUYỆT ĐỐI KHÔNG tự ý đổi thời gian trong ngày, KHÔNG tự chèn các cụm mở đầu sáo rỗng kiểu "sau một ngày mệt mỏi/dài đằng đẵng", KHÔNG nhảy sang cảnh khác — TRỪ KHI [MỆNH LỆNH] bên dưới yêu cầu rõ ràng.\n\n`;
   }
 
   if (activeChapter.outline.trim()) {
     prompt += `[DÀN Ý]\n${activeChapter.outline.trim()}\n\n`;
   }
+
+  prompt += `[MỆNH LỆNH — ƯU TIÊN CAO NHẤT, bám sát đúng bối cảnh đoạn "ĐANG VIẾT" ở trên]\n${authorDirective.trim() || 'Tiếp tục tự nhiên, đúng bối cảnh hiện tại, không đổi cảnh, không đổi thời gian.'}\n\n`;
+
+  // ✅ SỬA LỖI 2: Chỉ chèn các rule khi chúng được BẬT trong hardRules
+  // Lấy hardRules từ state
+  const hardRules = state.rules?.hardRules;
+
+  // Phần này luôn bật (không có toggle) - cốt lõi để chặn AI tự kết thúc
+  prompt += `⛔ ĐÂY LÀ ĐOẠN GIỮA CHƯƠNG — CHƯA PHẢI ĐOẠN KẾT:
+- KHÔNG để nhân vật rời khỏi hiện trường trừ khi mệnh lệnh yêu cầu rõ.
+- KHÔNG viết câu tổng kết/định hướng kiểu "và thế là...", "cuộc chiến đã bắt đầu...", "từ đây mọi chuyện thay đổi...", "một chương mới mở ra...", "định mệnh đã an bài..."
+- KHÔNG viết câu mang tính "đóng màn" hay "mở màn cho tương lai".
+- Dừng đúng tại hành động cuối trong mệnh lệnh.
+- Viết ĐỦ từ, không tự rút ngắn.`;
+
+  // 👇 CHỈ CHÈN KHI RULE ĐƯỢC BẬT
+  if (hardRules?.noSparseDialogue) {
+    prompt += `\n- 💬 ĐỐI THOẠI: tối thiểu 30% nội dung đoạn viết. Mỗi nhân vật chính trong cảnh PHẢI có ít nhất 3-5 câu thoại, thoại phải thể hiện tính cách và cảm xúc, KHÔNG viết thoại chỉ để lấp chỗ.`;
+  }
+
+  if (hardRules?.requireBodyDetail) {
+    prompt += `\n- 🧍 MIÊU TẢ CƠ THỂ: mỗi lần nhân vật xuất hiện hoặc có hành động quan trọng, PHẢI có 1-2 câu miêu tả cơ thể/thân hình (dáng vóc, tư thế, cử chỉ, chuyển động cơ thể) gắn với khoảnh khắc đó. KHÔNG viết kiểu "hắn đứng đó" mà không kèm miêu tả cơ thể.`;
+  }
+
+  // Thêm newline sau khối chỉ thị
+  prompt += '\n\n';
 
   prompt += `[NHÂN VẬT]\nĐã xuất hiện: ${appeared.join(', ') || 'Chưa có'}\n`;
   if (notAppeared.length) {
@@ -290,10 +340,68 @@ function buildWritePrompt(
   }
   prompt += '\n';
 
-  prompt += `[MỆNH LỆNH]\n${authorDirective.trim() || 'Tiếp tục tự nhiên.'}\n\n`;
   prompt += `[YÊU CẦU]\nĐộ dài: ${minW}-${maxW} chữ. Văn xuôi thuần túy.`;
 
   return prompt;
+}
+
+// ─── C1: extractEntityUpdatesFromAI ────────────────────────────────────────────
+interface EntityUpdate {
+  name: string;
+  type: 'character' | 'world';
+  update: string;
+}
+
+async function extractEntityUpdatesFromAI(
+  chapterContent: string,
+  knownCharacterNames: string[],
+  knownWorldNames: string[],
+  activeKey: any
+): Promise<EntityUpdate[]> {
+  if (knownCharacterNames.length === 0 && knownWorldNames.length === 0) return [];
+
+  const systemPrompt = `Bạn là AI trích xuất thông tin thay đổi cho tiểu thuyết mạng.
+Danh sách nhân vật đã biết: ${knownCharacterNames.join(', ') || 'Không có'}
+Danh sách thế lực/thực thể đã biết: ${knownWorldNames.join(', ') || 'Không có'}
+
+Nhiệm vụ: Đọc đoạn chương truyện, chỉ ra NHỮNG nhân vật/thế lực (trong 2 danh sách trên) có THÔNG TIN MỚI/THAY ĐỔI xảy ra trong đoạn này (VD: đột phá cảnh giới, bị thương, đổi phe, lộ thân phận, quan hệ thay đổi, tổ chức bị tấn công/đổi chủ...).
+BỎ QUA nhân vật/thế lực chỉ xuất hiện thoáng qua mà không có gì thay đổi thực sự.
+Trả về JSON array, KHÔNG markdown, KHÔNG giải thích, chỉ JSON thuần. Nếu không có gì đáng ghi nhận, trả về [].
+Mỗi phần tử gồm: name (đúng tên trong danh sách), type ("character" hoặc "world"), update (mô tả ngắn gọn 1-2 câu về điều gì đã thay đổi).`;
+
+  const userPrompt = `Đoạn chương:\n${chapterContent.slice(0, 4000)}\n\nTrả về JSON array các cập nhật.`;
+
+  const body: Record<string, any> = {
+    prompt: userPrompt,
+    systemInstruction: systemPrompt,
+    provider: activeKey?.provider || 'gemini',
+  };
+  if (activeKey) {
+    body.customApiKey = activeKey.key;
+    if (activeKey.customModel) body.customModel = activeKey.customModel;
+    if (['openai', 'claude', 'grok', 'antigravity'].includes(activeKey.provider)) {
+      body.customEndpoint = 'https://ag.beijixingxing.com/v1/chat/completions';
+    }
+    if (activeKey.provider === 'catiecli') {
+      body.customEndpoint = 'https://catiecli.sukaka.top/v1/chat/completions';
+    }
+  }
+
+  try {
+    const data = await callApiWithRetry('generate', body, { maxRetries: 1, baseDelay: 1000 });
+    let text = (data.text || '').trim().normalize('NFC').replace(/```json\n?/g, '').replace(/```\n?/g, '').trim();
+    const match = text.match(/\[[\s\S]*\]/);
+    if (!match) return [];
+    const parsed = JSON.parse(match[0]);
+    if (!Array.isArray(parsed)) return [];
+    return parsed.filter((u: any) => u.name && u.update).map((u: any) => ({
+      name: String(u.name),
+      type: u.type === 'world' ? 'world' : 'character',
+      update: String(u.update),
+    }));
+  } catch {
+    return [];
+  }
 }
 
 // ─── COMPONENT CHÍNH ──────────────────────────────────────────────────────────
@@ -304,12 +412,10 @@ export default function Page5Compose({ state, updateState, onNavigate }: Page5Co
   const [previousContent, setPreviousContent] = useState<string | null>(null);
   const [selectedRange, setSelectedRange] = useState<number>(1500);
 
-  // ✅ BƯỚC 2: Cập nhật type cho state
   const [writeMode, setWriteMode] = useState<'continue' | 'rewrite' | 'scene' | 'reborn' | 'fresh'>(
     state.config.writeMode || 'continue'
   );
 
-  // ✅ BƯỚC 2: Cập nhật type cho handler
   const handleSetWriteMode = (mode: 'continue' | 'rewrite' | 'scene' | 'reborn' | 'fresh') => {
     setWriteMode(mode);
     updateState((prev) => {
@@ -353,7 +459,7 @@ export default function Page5Compose({ state, updateState, onNavigate }: Page5Co
   const [summaryLoading, setSummaryLoading] = useState(false);
   const [summaryError, setSummaryError] = useState<string | null>(null);
 
-  // ─── EXPORT: Tải text truyện ──────────────────────────────────────────────
+  // ─── EXPORT ──────────────────────────────────────────────────────────────
   const handleExportText = () => {
     if (!state.chapters || state.chapters.length === 0) {
       alert('Chưa có chương nào để xuất!');
@@ -511,6 +617,7 @@ ${storyEventsSummary ? `SỰ KIỆN: ${storyEventsSummary}` : ''}
 ${chaptersSummary}`;
   }, [state, activeChapter]);
 
+  // ─── handleSendChat ──────────────────────────────────────────────────────
   const handleSendChat = async (customPrompt?: string) => {
     const input = (customPrompt || chatInput).trim();
     if (!input || chatLoading) return;
@@ -560,7 +667,10 @@ Trả lời câu hỏi của tác giả: phân tích sâu, gợi ý thực tế,
         }
       }
 
-      const data = await callApi('generate', body);
+      const data = await callApiWithRetry('generate', body, {
+        maxRetries: 1,
+        baseDelay: 1000,
+      });
 
       const aiMsg: ChatMessage = {
         id: Math.random().toString(36).substr(2, 9),
@@ -607,6 +717,7 @@ Trả lời câu hỏi của tác giả: phân tích sâu, gợi ý thực tế,
     });
   };
 
+  // ─── handleAIGenerateNext ──────────────────────────────────────────────
   const handleAIGenerateNext = async () => {
     if (aiLoading || !activeChapter) return;
 
@@ -630,6 +741,7 @@ Trả lời câu hỏi của tác giả: phân tích sâu, gợi ý thực tế,
         prompt: finalPrompt,
         systemInstruction,
         provider: activeKey?.provider || 'gemini',
+        maxWords: selectedOption.range[1], // 👈 gửi số từ tối đa lên server
       };
 
       if (activeKey) {
@@ -643,7 +755,10 @@ Trả lời câu hỏi của tác giả: phân tích sâu, gợi ý thực tế,
         }
       }
 
-      const data = await callApi('generate', body);
+      const data = await callApiWithRetry('generate', body, {
+        maxRetries: 2,
+        baseDelay: 1500,
+      });
 
       const textGenerated = (data.text || '').trim().normalize('NFC');
       if (!textGenerated) throw new Error('AI trả về nội dung trống rỗng.');
@@ -656,12 +771,11 @@ Trả lời câu hỏi của tác giả: phân tích sâu, gợi ý thực tế,
       }
 
       setPreviousContent(activeChapter.content);
+      
       let appended;
-      if (writeMode === 'fresh') {
-        // Viết mới: thay thế toàn bộ nội dung
+      if (writeMode === 'fresh' && !activeChapter.content.trim()) {
         appended = textGenerated;
       } else {
-        // Các chế độ khác: nối thêm
         appended = (activeChapter.content ? activeChapter.content + '\n\n' : '') + textGenerated;
       }
       handleUpdateField('content', appended);
@@ -679,6 +793,7 @@ Trả lời câu hỏi của tác giả: phân tích sâu, gợi ý thực tế,
     }
   };
 
+  // ─── C4: handleSummarizeChapter ──────────────────────────────────────────────
   const handleSummarizeChapter = async () => {
     if (!activeChapter) return;
     
@@ -720,7 +835,10 @@ Trả lời câu hỏi của tác giả: phân tích sâu, gợi ý thực tế,
         }
       }
 
-      const data = await callApi('generate', body);
+      const data = await callApiWithRetry('generate', body, {
+        maxRetries: 1,
+        baseDelay: 1000,
+      });
 
       const summaryText = (data.text || '').trim();
       if (!summaryText) {
@@ -754,7 +872,43 @@ Trả lời câu hỏi của tác giả: phân tích sâu, gợi ý thực tế,
         }
       });
 
-      setSummaryError('✅ Đã lưu tóm tắt chương!');
+      // ✅ Trích xuất & cập nhật "Dữ liệu hiện hữu" cho nhân vật/thế lực liên quan
+      const chapterLabel = activeChapter.title || `Chương ${order}`;
+      const updates = await extractEntityUpdatesFromAI(
+        activeChapter.content,
+        state.characters.map(c => c.name),
+        state.worldEntities.map(w => w.name),
+        activeKey
+      );
+
+      if (updates.length > 0) {
+        updateState((prev) => {
+          updates.forEach(u => {
+            const entry = `[${chapterLabel}] ${u.update}`;
+            if (u.type === 'character') {
+              const char = prev.characters.find(c => c.name === u.name);
+              if (char) {
+                char.currentData = char.currentData
+                  ? char.currentData + '\n\n' + entry
+                  : entry;
+              }
+            } else {
+              const world = prev.worldEntities.find(w => w.name === u.name);
+              if (world) {
+                world.currentData = world.currentData
+                  ? world.currentData + '\n\n' + entry
+                  : entry;
+              }
+            }
+          });
+        });
+      }
+
+      setSummaryError(
+        updates.length > 0
+          ? `✅ Đã lưu tóm tắt + cập nhật ${updates.length} hồ sơ liên quan!`
+          : '✅ Đã lưu tóm tắt chương!'
+      );
       setTimeout(() => setSummaryError(null), 2500);
 
     } catch (err: any) {
@@ -922,7 +1076,6 @@ Trả lời câu hỏi của tác giả: phân tích sâu, gợi ý thực tế,
                 {/* ─── Chế Độ ────────────────────────────────────────────────── */}
                 <div className="bg-neutral-900 border border-neutral-850 rounded-xl p-3 space-y-2">
                   <span className="text-[11px] font-bold text-gray-200">🎬 Chế Độ</span>
-                  {/* ✅ BƯỚC 6: UI với hint */}
                   <div className="grid grid-cols-2 gap-1">
                     {WRITE_MODES.map(m => {
                       const isFreshRecommended = getWordCount(activeChapter.content) < 50;
@@ -1064,15 +1217,37 @@ Trả lời câu hỏi của tác giả: phân tích sâu, gợi ý thực tế,
 
                 {/* ─── Dàn Ý ────────────────────────────────────────────────── */}
                 <div className="bg-neutral-900 border border-neutral-850 rounded-xl p-3 space-y-2">
-                  <div className="flex items-center gap-1.5 text-[11px] font-bold text-gray-200"><FileText className="w-3.5 h-3.5 text-amber-500" /> Dàn Ý</div>
-                  <textarea rows={2} placeholder="Phác thảo nội dung chương..." value={activeChapter.outline} onChange={e => handleUpdateField('outline', e.target.value)} className="w-full bg-neutral-950 border border-neutral-800 rounded-lg p-2 text-[11px] text-gray-300 focus:outline-none focus:border-amber-600 leading-relaxed resize-none" spellCheck={false} />
+                  <div className="flex items-center gap-1.5 text-[11px] font-bold text-gray-200">
+                    <FileText className="w-3.5 h-3.5 text-amber-500" /> 
+                    Dàn Ý
+                    <span className="text-[8px] text-gray-600 font-normal ml-1">(hướng dẫn tổng thể)</span>
+                  </div>
+                  <textarea 
+                    rows={2} 
+                    placeholder="📋 Phác thảo sự kiện chính của chương (không phải mệnh lệnh viết ngay)..." 
+                    value={activeChapter.outline} 
+                    onChange={e => handleUpdateField('outline', e.target.value)} 
+                    className="w-full bg-neutral-950 border border-neutral-800 rounded-lg p-2 text-[11px] text-gray-300 focus:outline-none focus:border-amber-600 leading-relaxed resize-none" 
+                    spellCheck={false} 
+                  />
                 </div>
 
                 {/* ─── Mệnh Lệnh ────────────────────────────────────────────── */}
                 <div className="bg-neutral-900 border border-red-950/40 rounded-xl p-3 space-y-2">
-                  <div className="flex items-center gap-1.5 text-[11px] font-bold text-red-300"><PenTool className="w-3.5 h-3.5 text-red-500" /> Mệnh Lệnh</div>
-                  <p className="text-[9px] text-gray-500 leading-relaxed">AI viết theo mệnh lệnh này</p>
-                  <textarea rows={3} placeholder="Yêu cầu viết gì..." value={activeChapter.prompt} onChange={e => handleUpdateField('prompt', e.target.value)} className="w-full bg-neutral-950 border border-neutral-800 rounded-lg p-2 text-[11px] text-gray-300 focus:outline-none focus:border-red-500 leading-relaxed resize-none" spellCheck={false} />
+                  <div className="flex items-center gap-1.5 text-[11px] font-bold text-red-300">
+                    <PenTool className="w-3.5 h-3.5 text-red-500" /> 
+                    Mệnh Lệnh
+                    <span className="text-[8px] text-gray-600 font-normal ml-1">(1 beat cụ thể cho lần gọi này)</span>
+                  </div>
+                  <p className="text-[9px] text-gray-500 leading-relaxed">AI viết theo mệnh lệnh này — luôn kết ở trạng thái "đang diễn ra" để lần sau viết tiếp</p>
+                  <textarea 
+                    rows={3} 
+                    placeholder="VD: Viết tiếp: Trần Phong đã đạt tới đỉnh cảnh giới, mở mắt ra trong lôi đình, trước mặt là Lưu Ly đang khiếp sợ." 
+                    value={activeChapter.prompt} 
+                    onChange={e => handleUpdateField('prompt', e.target.value)} 
+                    className="w-full bg-neutral-950 border border-neutral-800 rounded-lg p-2 text-[11px] text-gray-300 focus:outline-none focus:border-red-500 leading-relaxed resize-none" 
+                    spellCheck={false} 
+                  />
                   <div className="flex flex-wrap gap-1">
                     {PRESET_PROMPTS.slice(0, 4).map(p => (
                       <button key={p.label} onClick={() => handleUpdateField('prompt', p.text)} className="px-1.5 py-0.5 bg-neutral-950 border border-neutral-800 hover:border-red-900/60 rounded text-[8px] text-gray-400 hover:text-red-300 truncate max-w-[80px]" title={p.text}>{p.label.slice(0, 15)}</button>

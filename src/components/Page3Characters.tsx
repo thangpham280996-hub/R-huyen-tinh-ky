@@ -30,6 +30,36 @@ const ROLES = [
   { value: 'Nhân vật phụ', label: 'Nhân vật phụ' },
 ];
 
+// ✅ B1: Thêm bảng ánh xạ quan hệ ngược
+const INVERSE_RELATION_MAP: Record<string, string> = {
+  'Người yêu': 'Người yêu',
+  'Vợ': 'Chồng',
+  'Chồng': 'Vợ',
+  'Đạo lữ': 'Đạo lữ',
+  'Người tình bí mật': 'Người tình bí mật',
+  'Harem': 'Chủ nhân',
+  'Nô dịch': 'Chủ nhân',
+  'Chủ nhân': 'Nô dịch',
+  'Lô đỉnh': 'Chủ nhân',
+  'Tình địch': 'Tình địch',
+  'Cừu hận': 'Cừu hận',
+  'Kẻ thù': 'Kẻ thù',
+  'Phản bội': 'Bị phản bội',
+  'Tỷ muội': 'Tỷ muội',
+  'Huynh đệ': 'Huynh đệ',
+  'Sư phụ': 'Đệ tử',
+  'Đệ tử': 'Sư phụ',
+  'Đồng môn': 'Đồng môn',
+  'Bạn thân': 'Bạn thân',
+  'Đồng minh': 'Đồng minh',
+  'Cấp trên': 'Cấp dưới',
+  'Cấp dưới': 'Cấp trên',
+};
+
+function guessInverseRelation(type: string): string {
+  return INVERSE_RELATION_MAP[type] || type;
+}
+
 const WORLD_TYPES = [
   { value: 'Tông môn', label: 'Tông môn' },
   { value: 'Gia tộc', label: 'Gia tộc' },
@@ -135,7 +165,6 @@ Mỗi phần tử gồm: order (số), chapterLabel (nhãn ngắn, VD "Chương 
     }
   }
 
-  // ✅ ĐÃ SỬA: dùng callApi thay vì fetch
   const data = await callApi('generate', body);
 
   let text = (data.text || '').trim().normalize('NFC').replace(/```json\n?/g, '').replace(/```\n?/g, '').trim();
@@ -201,7 +230,6 @@ Trả về JSON array. Ví dụ format:
     }
   }
 
-  // ✅ ĐÃ SỬA: dùng callApi thay vì fetch
   const data = await callApi('generate', body);
 
   let text = (data.text || '').trim().normalize('NFC');
@@ -275,7 +303,6 @@ Mỗi phần tử gồm đúng 3 trường: name (tên ngắn gọn), type (lo�
     }
   }
 
-  // ✅ ĐÃ SỬA: dùng callApi thay vì fetch
   const data = await callApi('generate', body);
 
   let text = (data.text || '').trim().normalize('NFC');
@@ -328,7 +355,6 @@ colorPalette (tông màu), material (chất liệu), significance (ý nghĩa/ngu
     }
   }
 
-  // ✅ ĐÃ SỬA: dùng callApi thay vì fetch
   const data = await callApi('generate', body);
 
   let text = (data.text || '').trim().normalize('NFC').replace(/```json\n?/g, '').replace(/```\n?/g, '').trim();
@@ -377,7 +403,6 @@ Gồm: name, context, description, colorPalette, material, significance (để t
     }
   }
 
-  // ✅ ĐÃ SỬA: dùng callApi thay vì fetch
   const data = await callApi('generate', body);
 
   let text = (data.text || '').trim().normalize('NFC').replace(/```json\n?/g, '').replace(/```\n?/g, '').trim();
@@ -447,7 +472,6 @@ Tạo 2-4 chiêu sức trong "abilities" nếu phù hợp.`;
     }
   }
 
-  // ✅ ĐÃ SỬA: dùng callApi thay vì fetch
   const data = await callApi('generate', body);
 
   let text = (data.text || '').trim().normalize('NFC').replace(/```json\n?/g, '').replace(/```\n?/g, '').trim();
@@ -505,7 +529,6 @@ Trả về JSON object đúng cấu trúc (để trống trường nào ảnh kh
     }
   }
 
-  // ✅ ĐÃ SỬA: dùng callApi thay vì fetch
   const data = await callApi('generate', body);
 
   let text = (data.text || '').trim().normalize('NFC').replace(/```json\n?/g, '').replace(/```\n?/g, '').trim();
@@ -2129,25 +2152,33 @@ export default function Page3Characters({ state, updateState, onNavigate }: Page
 
   const [isAddingChar, setIsAddingChar] = useState(false);
   const [editingCharId, setEditingCharId] = useState<string | null>(null);
+  
+  // ✅ B7: Thêm currentData vào charForm
   const [charForm, setCharForm] = useState<any>({
     name: '', gender: 'Nữ', age: '18', role: 'Nữ chính',
     appearance: '', personality: '', backStory: '',
-    currentStatus: '', additionalInfo: '', relationships: [], images: [],
+    currentStatus: '', additionalInfo: '', currentData: '', relationships: [], images: [],
     timeline: [], firstAppearanceOrder: '',
     abilities: [],
     fashionStyles: [],
   });
 
   const [isLinkingRelation, setIsLinkingRelation] = useState<string | null>(null);
-  const [relForm, setRelForm] = useState({ targetCharacterId: '', relationType: 'Người tình', description: '' });
+  
+  // ✅ B2: Sửa relForm thêm reverseRelationType và reverseDescription
+  const [relForm, setRelForm] = useState({
+    targetCharacterId: '', relationType: 'Người tình', description: '',
+    reverseRelationType: '', reverseDescription: '',
+  });
   const [customRelationType, setCustomRelationType] = useState('');
 
   const [worldPanelExpanded, setWorldPanelExpanded] = useState(false);
   const [worldCreateMode, setWorldCreateMode] = useState<'batch' | 'detail'>('batch');
 
   const [isAddingWorldEntity, setIsAddingWorldEntity] = useState(false);
+  // ✅ B10: Thêm currentData vào worldForm
   const [worldForm, setWorldForm] = useState<any>({
-    name: '', type: 'Tông môn', description: '', firstAppearanceOrder: '',
+    name: '', type: 'Tông môn', description: '', currentData: '', firstAppearanceOrder: '',
     speciesTraits: undefined,
   });
 
@@ -2176,13 +2207,17 @@ export default function Page3Characters({ state, updateState, onNavigate }: Page
   const [refImages, setRefImages] = useState<{ id: string; dataUrl: string }[]>([]);
   const [refAppearanceHint, setRefAppearanceHint] = useState('');
 
+  // ✅ D1: Thêm state xác nhận xóa
   const [confirmingDeleteCharId, setConfirmingDeleteCharId] = useState<string | null>(null);
   const [confirmingDeleteWorldId, setConfirmingDeleteWorldId] = useState<string | null>(null);
+  const [confirmingClearCharData, setConfirmingClearCharData] = useState(false);
+  const [confirmingClearWorldData, setConfirmingClearWorldData] = useState(false);
 
+  // ✅ B7: resetCharForm có currentData
   const resetCharForm = () => setCharForm({
     name: '', gender: 'Nữ', age: '18', role: 'Nữ chính',
     appearance: '', personality: '', backStory: '',
-    currentStatus: '', additionalInfo: '', relationships: [], images: [],
+    currentStatus: '', additionalInfo: '', currentData: '', relationships: [], images: [],
     timeline: [], firstAppearanceOrder: '',
     abilities: [],
     fashionStyles: [],
@@ -2208,11 +2243,12 @@ export default function Page3Characters({ state, updateState, onNavigate }: Page
     setEditingCharId(null);
   };
 
+  // ✅ B8: Nạp currentData khi sửa
   const handleEditCharacterClick = (c: Character) => {
     setCharForm({
       name: c.name, gender: c.gender, age: c.age, role: c.role,
       appearance: c.appearance, personality: c.personality, backStory: c.backStory,
-      currentStatus: c.currentStatus, additionalInfo: c.additionalInfo,
+      currentStatus: c.currentStatus, additionalInfo: c.additionalInfo, currentData: c.currentData || '',
       relationships: c.relationships || [], images: c.images || [],
       timeline: c.timeline || [],
       firstAppearanceOrder: c.firstAppearanceOrder !== undefined ? String(c.firstAppearanceOrder) : '',
@@ -2231,28 +2267,43 @@ export default function Page3Characters({ state, updateState, onNavigate }: Page
     setConfirmingDeleteCharId(null);
   };
 
+  // ✅ B5: handleAddRelationship ghi cả 2 chiều
   const handleAddRelationship = (sourceCharId: string) => {
     if (!relForm.targetCharacterId) { alert('Chọn nhân vật mục tiêu!'); return; }
     const finalRelationType = relForm.relationType === '__custom__'
       ? (customRelationType.trim() || 'Quan hệ khác')
       : relForm.relationType;
+    const finalReverseType = relForm.reverseRelationType.trim() || finalRelationType;
 
     updateState((prev) => {
       const source = prev.characters.find((c) => c.id === sourceCharId);
-      if (!source) return;
+      const target = prev.characters.find((c) => c.id === relForm.targetCharacterId);
+      if (!source || !target) return;
+
       if (!source.relationships) source.relationships = [];
+      if (!target.relationships) target.relationships = [];
+
       source.relationships = source.relationships.filter((r) => r.targetCharacterId !== relForm.targetCharacterId);
       source.relationships.push({
         targetCharacterId: relForm.targetCharacterId,
         relationType: finalRelationType,
-        description: relForm.description
+        description: relForm.description,
+      });
+
+      target.relationships = target.relationships.filter((r) => r.targetCharacterId !== sourceCharId);
+      target.relationships.push({
+        targetCharacterId: sourceCharId,
+        relationType: finalReverseType,
+        description: relForm.description,
       });
     });
-    setRelForm({ targetCharacterId: '', relationType: 'Người tình', description: '' });
+
+    setRelForm({ targetCharacterId: '', relationType: 'Người tình', description: '', reverseRelationType: '', reverseDescription: '' });
     setCustomRelationType('');
     setIsLinkingRelation(null);
   };
 
+  // ✅ B10: reset worldForm có currentData
   const handleSaveWorldEntity = () => {
     if (!worldForm.name.trim()) { alert('Tên không được trống!'); return; }
     const { firstAppearanceOrder, speciesTraits, ...rest } = worldForm;
@@ -2264,7 +2315,7 @@ export default function Page3Characters({ state, updateState, onNavigate }: Page
         firstAppearanceOrder: firstAppearanceOrder.trim() ? Number(firstAppearanceOrder) : undefined,
       });
     });
-    setWorldForm({ name: '', type: 'Tông môn', description: '', firstAppearanceOrder: '', speciesTraits: undefined });
+    setWorldForm({ name: '', type: 'Tông môn', description: '', currentData: '', firstAppearanceOrder: '', speciesTraits: undefined });
   };
 
   const handleDeleteWorldEntity = (id: string) => {
@@ -2423,10 +2474,9 @@ export default function Page3Characters({ state, updateState, onNavigate }: Page
     setReviewEdits(prev => prev.map((c, i) => i === idx ? { ...c, [field]: value } : c));
   };
 
+  // ─── RENDER ──────────────────────────────────────────────────────────────
   return (
     <div className="max-w-4xl mx-auto py-8 px-4">
-      {/* ... phần render của component ... */}
-      {/* Giữ nguyên toàn bộ phần render của component */}
       <div className="flex flex-wrap items-center justify-between gap-4 mb-8">
         <div className="flex items-center gap-3">
           <div className="p-2.5 bg-red-950/40 border border-red-500/30 rounded-xl">
@@ -2878,6 +2928,42 @@ export default function Page3Characters({ state, updateState, onNavigate }: Page
                   spellCheck={false} />
               </div>
 
+              {/* ✅ B9 + D2: Ô Dữ liệu hiện hữu + nút xóa lịch sử */}
+              <div className="border-t border-cyan-900/30 pt-3">
+                <div className="flex items-center justify-between mb-1">
+                  <label className="text-xs text-cyan-300 flex items-center gap-1.5">
+                    🔄 Dữ liệu hiện hữu <span className="text-[9px] text-gray-500 font-normal">(tự động cập nhật khi bấm "Tóm tắt chương" ở trang Sáng Tác — KHÔNG ghi đè hồ sơ gốc)</span>
+                  </label>
+                  {charForm.currentData?.trim() && (
+                    confirmingClearCharData ? (
+                      <div className="flex items-center gap-1 shrink-0">
+                        <button type="button"
+                          onClick={() => { setCharForm({ ...charForm, currentData: '' }); setConfirmingClearCharData(false); }}
+                          className="text-[9px] px-1.5 py-0.5 bg-red-900/60 text-red-200 rounded">Xác nhận xóa</button>
+                        <button type="button"
+                          onClick={() => setConfirmingClearCharData(false)}
+                          className="text-[9px] px-1.5 py-0.5 bg-neutral-800 text-gray-400 rounded">Hủy</button>
+                      </div>
+                    ) : (
+                      <button type="button"
+                        onClick={() => setConfirmingClearCharData(true)}
+                        className="text-[9px] text-gray-500 hover:text-red-400 flex items-center gap-0.5 shrink-0">
+                        <Trash2 className="w-2.5 h-2.5" /> Xóa lịch sử
+                      </button>
+                    )
+                  )}
+                </div>
+                <textarea rows={5}
+                  placeholder="Sẽ tự động điền khi bạn dùng nút Tóm tắt chương ở trang Sáng Tác. Cũng có thể tự gõ tay tại đây."
+                  value={charForm.currentData || ''}
+                  onChange={(e) => setCharForm({ ...charForm, currentData: e.target.value })}
+                  className="w-full bg-neutral-950 border border-cyan-900/40 rounded-lg p-2 text-xs text-gray-200 focus:outline-none focus:border-cyan-600 resize-y whitespace-pre-wrap"
+                  spellCheck={false} />
+                <p className="text-[9px] text-gray-600 mt-1 leading-relaxed">
+                  Ghi thay đổi phát sinh khi viết (cảnh giới mới, vết thương, quan hệ thay đổi...). Không sửa trực tiếp Ngoại hình/Tính cách/Quá khứ ở trên.
+                </p>
+              </div>
+
               <div>
                 <label className="block text-xs text-gray-400 mb-1 flex items-center gap-1">
                   <Clock className="w-3 h-3 text-cyan-400" /> Mốc xuất hiện lần đầu (tuỳ chọn)
@@ -2985,6 +3071,8 @@ export default function Page3Characters({ state, updateState, onNavigate }: Page
                     {c.appearance && <p className="line-clamp-1"><span className="text-gray-500">Ngoại hình:</span> {ensureString(c.appearance)}</p>}
                     {c.personality && <p className="line-clamp-1"><span className="text-gray-500">Tính cách:</span> {ensureString(c.personality)}</p>}
                     {c.additionalInfo && <p className="text-amber-400/70 text-[10px] line-clamp-1">✦ {ensureString(c.additionalInfo)}</p>}
+                    {/* ✅ B12: Hiển thị currentData trên card nhân vật */}
+                    {c.currentData && <p className="text-cyan-400/80 text-[10px] line-clamp-1">🔄 {ensureString(c.currentData)}</p>}
                     {c.abilities && c.abilities.length > 0 && (
                       <p className="text-[10px] text-red-400/70 line-clamp-1">
                         ⚔️ {c.abilities.slice(0, 3).map(a => a.name).join(', ')}
@@ -3002,9 +3090,12 @@ export default function Page3Characters({ state, updateState, onNavigate }: Page
                             <span className="text-red-400">{r.relationType}</span>
                             <span className="text-gray-600">→</span>
                             <span>{targetName}</span>
+                            {/* ✅ B6: Sửa nút xóa quan hệ - xóa cả 2 chiều */}
                             <button onClick={() => updateState((prev) => {
                               const s = prev.characters.find((c2) => c2.id === c.id);
+                              const t = prev.characters.find((c2) => c2.id === r.targetCharacterId);
                               if (s) s.relationships = s.relationships.filter((rel) => rel.targetCharacterId !== r.targetCharacterId);
+                              if (t) t.relationships = t.relationships.filter((rel) => rel.targetCharacterId !== c.id);
                             })} className="text-gray-600 hover:text-red-400 ml-0.5">×</button>
                           </span>
                         );
@@ -3049,7 +3140,8 @@ export default function Page3Characters({ state, updateState, onNavigate }: Page
                             'Bạn thân', 'Đồng minh', 'Cấp trên', 'Cấp dưới',
                           ].map((rel) => (
                             <button key={rel} type="button"
-                              onClick={() => setRelForm({ ...relForm, relationType: rel })}
+                              // ✅ B3: Cập nhật onClick để tự gợi ý quan hệ ngược
+                              onClick={() => setRelForm({ ...relForm, relationType: rel, reverseRelationType: guessInverseRelation(rel) })}
                               className={`px-2 py-0.5 rounded text-[10px] border transition-all ${
                                 relForm.relationType === rel
                                   ? 'bg-red-900/50 border-red-600/60 text-red-300'
@@ -3083,6 +3175,23 @@ export default function Page3Characters({ state, updateState, onNavigate }: Page
                           <p className="text-[10px] text-red-400 mt-1">
                             Đã chọn: <strong>{relForm.relationType}</strong>
                           </p>
+                        )}
+
+                        {/* ✅ B4: Thêm ô Quan hệ ngược lại */}
+                        {relForm.relationType && (
+                          <div className="mt-2">
+                            <label className="block text-[10px] text-gray-500 mb-1">
+                              Quan hệ ngược lại (góc nhìn của nhân vật kia) — kiểm tra/sửa trước khi lưu
+                            </label>
+                            <input
+                              type="text"
+                              placeholder="VD: Em họ, Đệ tử, Chồng..."
+                              value={relForm.reverseRelationType}
+                              onChange={(e) => setRelForm({ ...relForm, reverseRelationType: e.target.value })}
+                              className="w-full bg-neutral-900 border border-amber-800/50 rounded-lg px-2 py-1.5 text-xs text-gray-200 focus:outline-none focus:border-amber-600"
+                              spellCheck={false}
+                            />
+                          </div>
                         )}
                       </div>
 
@@ -3156,7 +3265,6 @@ export default function Page3Characters({ state, updateState, onNavigate }: Page
 
                 {worldCreateMode === 'batch' && (
                   <div className="space-y-3">
-                    {/* Batch mode content - giữ nguyên */}
                     <div>
                       <label className="block text-[10px] text-gray-400 mb-1.5">
                         Danh mục <span className="text-gray-600">(để trống = AI tự chọn đa dạng)</span>
@@ -3338,6 +3446,39 @@ export default function Page3Characters({ state, updateState, onNavigate }: Page
                         spellCheck={false} />
                     </div>
 
+                    {/* ✅ B11 + D3: Ô Dữ liệu hiện hữu cho thế lực + nút xóa lịch sử */}
+                    <div className="border-t border-cyan-900/30 pt-3">
+                      <div className="flex items-center justify-between mb-1">
+                        <label className="text-[10px] text-cyan-300 flex items-center gap-1.5">
+                          🔄 Dữ liệu hiện hữu <span className="text-[9px] text-gray-500 font-normal">(tự động cập nhật khi Tóm tắt chương)</span>
+                        </label>
+                        {worldForm.currentData?.trim() && (
+                          confirmingClearWorldData ? (
+                            <div className="flex items-center gap-1 shrink-0">
+                              <button type="button"
+                                onClick={() => { setWorldForm({ ...worldForm, currentData: '' }); setConfirmingClearWorldData(false); }}
+                                className="text-[9px] px-1.5 py-0.5 bg-red-900/60 text-red-200 rounded">Xác nhận xóa</button>
+                              <button type="button"
+                                onClick={() => setConfirmingClearWorldData(false)}
+                                className="text-[9px] px-1.5 py-0.5 bg-neutral-800 text-gray-400 rounded">Hủy</button>
+                            </div>
+                          ) : (
+                            <button type="button"
+                              onClick={() => setConfirmingClearWorldData(true)}
+                              className="text-[9px] text-gray-500 hover:text-red-400 flex items-center gap-0.5 shrink-0">
+                              <Trash2 className="w-2.5 h-2.5" /> Xóa lịch sử
+                            </button>
+                          )
+                        )}
+                      </div>
+                      <textarea rows={4}
+                        placeholder="Sẽ tự động điền khi dùng nút Tóm tắt chương ở trang Sáng Tác. Có thể tự gõ tay."
+                        value={worldForm.currentData || ''}
+                        onChange={(e) => setWorldForm({ ...worldForm, currentData: e.target.value })}
+                        className="w-full bg-neutral-950 border border-cyan-900/40 rounded p-2 text-xs text-gray-200 focus:outline-none focus:border-cyan-600 resize-y whitespace-pre-wrap"
+                        spellCheck={false} />
+                    </div>
+
                     {(worldForm.type === 'Chủng tộc' || 
                       worldForm.type.toLowerCase().includes('yêu') || 
                       worldForm.type.toLowerCase().includes('ma') || 
@@ -3406,6 +3547,10 @@ export default function Page3Characters({ state, updateState, onNavigate }: Page
                   )}
                 </div>
                 <p className="text-[11px] text-gray-400 mt-1.5 leading-relaxed">{ensureString(e.description)}</p>
+                {/* ✅ B12: Hiển thị currentData trên card thế lực */}
+                {e.currentData && (
+                  <p className="text-[10px] text-cyan-400/80 mt-1 leading-relaxed">🔄 {ensureString(e.currentData)}</p>
+                )}
                 {e.speciesTraits && (
                   <div className="mt-1.5 flex flex-wrap gap-1">
                     {e.speciesTraits.threatLevel && (
