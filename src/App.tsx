@@ -4,7 +4,7 @@ import {
   RefreshCw, Save, History, X, Clock, CheckCircle2, AlertTriangle, Download,
   FolderOpen, Trash2, Plus, BookMarked
 } from 'lucide-react';
-import { NovelState } from './types';
+import { NovelState, migrateNovelState } from './types';
 import { DEFAULT_HARD_RULES } from './components/Page4Rules';
 import Page1Start from './components/Page1Start';
 import Page2Idea from './components/Page2Idea';
@@ -128,6 +128,14 @@ const makeInitialState = (title = ''): NovelState => ({
     customStyle: '',
     referenceFileContent: '',
     referenceFileName: '',
+    // ── CÁC FIELD MỚI ──
+    settingId: '',
+    tropeTags: [],
+    moodTags: [],
+    customTags: [],
+    contextAiExpanded: '',
+    foundationIdea: '',
+    foundationLockedAt: undefined,
   },
   characters: [],
   worldEntities: [],
@@ -137,13 +145,30 @@ const makeInitialState = (title = ''): NovelState => ({
     minWords: 1500,
     consistencyRules: '',
     hardRules: {
-      noSelfEnding: true, noNewCharacters: true, noOffTopicContent: true,
-      noUnmentionedRefs: true, noFakeIntensity: true, noTimeskip: true,
-      noRepeatContent: true, noMetaComments: true, noOOCPersonality: true,
-      noModernSlangInAncient: true, noAncientToneInModern: false,
-      noAbruptResolution: true, noSummaryMode: true, noExcessiveEllipsis: true,
-      noFutureCharacters: true, noSelfAddPlot: true, noDangerousTone: true,
-      noAddScene: true, noSkipNoAvoid: true, requireDetailedSexScene: true,
+      noSelfEnding: true,
+      noNewCharacters: true,
+      noOffTopicContent: true,
+      noUnmentionedRefs: true,
+      noFakeIntensity: true,
+      noTimeskip: true,
+      noRepeatContent: true,
+      noMetaComments: true,
+      noOOCPersonality: true,
+      noModernSlangInAncient: true,
+      noAncientToneInModern: false,
+      noAbruptResolution: true,
+      noSummaryMode: true,
+      noExcessiveEllipsis: true,
+      noFutureCharacters: true,
+      noSelfAddPlot: true,
+      noDangerousTone: true,
+      noAddScene: true,
+      noSkipNoAvoid: true,
+      requireDetailedSexScene: true,
+      noThematicClosingLine: true,
+      noSparseDialogue: true,
+      requireBodyDetail: true,
+      noDetailInconsistency: true,
     },
     loreEntries: [],
     sexualLexicon: undefined,
@@ -544,49 +569,47 @@ export default function App() {
     const list = loadProjectList();
     let activeId = getActiveProjectId();
 
+    // ── MIGRATE TỪ DỮ LIỆU CŨ (huyen_tinh_ky_state) ──
     const oldData = localStorage.getItem('huyen_tinh_ky_state');
     if (oldData && list.length === 0) {
       try {
         const parsed = JSON.parse(oldData) as NovelState;
-        if (parsed.rules?.hardRules) {
-          parsed.rules.hardRules = { ...DEFAULT_HARD_RULES, ...parsed.rules.hardRules };
-        }
+        const migrated = migrateNovelState(parsed);
         const newId = genId();
-        saveProject(newId, parsed);
+        saveProject(newId, migrated);
         setActiveProjectId(newId);
         setProjectId(newId);
-        setState(parsed);
+        setState(migrated);
         localStorage.removeItem('huyen_tinh_ky_state');
         return;
       } catch {}
     }
 
+    // ── MỞ PROJECT ACTIVE ──
     if (activeId && list.find(p => p.id === activeId)) {
       const data = loadProject(activeId);
       if (data) {
-        if (data.rules?.hardRules) {
-          data.rules.hardRules = { ...DEFAULT_HARD_RULES, ...data.rules.hardRules };
-        }
+        const migrated = migrateNovelState(data);
         setProjectId(activeId);
-        setState(data);
+        setState(migrated);
         return;
       }
     }
 
+    // ── MỞ PROJECT MỚI NHẤT ──
     if (list.length > 0) {
       const newest = list.sort((a, b) => b.updatedAt - a.updatedAt)[0];
       const data = loadProject(newest.id);
       if (data) {
-        if (data.rules?.hardRules) {
-          data.rules.hardRules = { ...DEFAULT_HARD_RULES, ...data.rules.hardRules };
-        }
+        const migrated = migrateNovelState(data);
         setProjectId(newest.id);
         setActiveProjectId(newest.id);
-        setState(data);
+        setState(migrated);
         return;
       }
     }
 
+    // ── TẠO MỚI NẾU KHÔNG CÓ GÌ ──
     setState(makeInitialState());
   }, []);
 
@@ -646,12 +669,10 @@ export default function App() {
     if (state && projectId) saveProject(projectId, state);
     const data = loadProject(id);
     if (data) {
-      if (data.rules?.hardRules) {
-        data.rules.hardRules = { ...DEFAULT_HARD_RULES, ...data.rules.hardRules };
-      }
+      const migrated = migrateNovelState(data);
       setProjectId(id);
       setActiveProjectId(id);
-      setState(data);
+      setState(migrated);
       setShowLibrary(false);
       setActiveTab('start');
     }
@@ -670,12 +691,10 @@ export default function App() {
       const newest = remaining.sort((a, b) => b.updatedAt - a.updatedAt)[0];
       const data = loadProject(newest.id);
       if (data) {
-        if (data.rules?.hardRules) {
-          data.rules.hardRules = { ...DEFAULT_HARD_RULES, ...data.rules.hardRules };
-        }
+        const migrated = migrateNovelState(data);
         setProjectId(newest.id);
         setActiveProjectId(newest.id);
-        setState(data);
+        setState(migrated);
         setActiveTab('start');
         setConfirmDeleteCurrent(false);
         return;
@@ -699,11 +718,9 @@ export default function App() {
     if (state && projectId) createBackup(projectId, state, 'manual', `Trước khi khôi phục — ${new Date().toLocaleString('vi-VN')}`);
     const restored = restoreBackup(id);
     if (restored && projectId) {
-      if (restored.rules?.hardRules) {
-        restored.rules.hardRules = { ...DEFAULT_HARD_RULES, ...restored.rules.hardRules };
-      }
-      setState(restored);
-      saveProject(projectId, restored);
+      const migrated = migrateNovelState(restored);
+      setState(migrated);
+      saveProject(projectId, migrated);
       setShowBackup(false);
       setSaveFlash('ok');
       setTimeout(() => setSaveFlash(null), 2000);

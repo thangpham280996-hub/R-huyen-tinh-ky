@@ -1,85 +1,116 @@
 // ──────────────────────────────────────────────────────────────────────────────
-// 1. CẤU HÌNH API KEY
+// types.ts - Định nghĩa kiểu dữ liệu toàn cục cho NovelAI
 // ──────────────────────────────────────────────────────────────────────────────
+
+import { AddressTermSet } from './components/addressTerms';
+
+// ─── 1. HARD RULES ──────────────────────────────────────────────────────────
+export interface HardRules {
+  noSelfEnding?: boolean;
+  noNewCharacters?: boolean;
+  noOffTopicContent?: boolean;
+  noUnmentionedRefs?: boolean;
+  noFakeIntensity?: boolean;
+  noTimeskip?: boolean;
+  noRepeatContent?: boolean;
+  noMetaComments?: boolean;
+  noOOCPersonality?: boolean;
+  noModernSlangInAncient?: boolean;
+  noAncientToneInModern?: boolean;
+  noAbruptResolution?: boolean;
+  noSummaryMode?: boolean;
+  noExcessiveEllipsis?: boolean;
+  noFutureCharacters?: boolean;
+  noSelfAddPlot?: boolean;
+  noDangerousTone?: boolean;
+  noAddScene?: boolean;
+  noSkipNoAvoid?: boolean;
+  requireDetailedSexScene?: boolean;
+  noThematicClosingLine?: boolean;
+  noSparseDialogue?: boolean;
+  requireBodyDetail?: boolean;
+  noDetailInconsistency?: boolean;
+  [key: string]: boolean | undefined;
+}
+
+// ─── 2. SEXUAL LEXICON ─────────────────────────────────────────────────────
+export interface SexualLexicon {
+  femaleOrgans?: string[];
+  maleOrgans?: string[];
+  fluids?: string[];
+  actions?: string[];
+  descriptions?: string[];
+  customTerms?: string;
+  maleParts?: string[];
+  femaleParts?: string[];
+  dominantActions?: string[];
+  states?: string[];
+  otherStates?: string[];
+  moanSounds?: string[];
+  sexSounds?: string[];
+  sexExpressions?: string[];
+  sexFluids?: string[];
+  [key: string]: any;
+}
+
+// ─── 3. LORE ENTRY ──────────────────────────────────────────────────────────
+export interface LoreEntry {
+  id: string;
+  key?: string;
+  title?: string;
+  content: string;
+  category?: string;
+}
+
+// ─── 4. API KEY CONFIG ──────────────────────────────────────────────────────
 export interface ApiKeyConfig {
   id: string;
-  provider: 'gemini' | 'openai' | 'claude' | 'grok' | 'antigravity' | 'catiecli';
-  key: string;
-  label: string;
-  isActive: boolean;
-  quotaExceeded: boolean;
-  quotaExceededAt?: number;
+  provider: string;
+  apiKey?: string;
+  key?: string;
+  baseUrl?: string;
+  selectedModel?: string;
   customModel?: string;
+  label?: string;
+  isActive?: boolean;
+  quotaExceeded?: boolean;
 }
 
-// ──────────────────────────────────────────────────────────────────────────────
-// 2. QUAN HỆ NHÂN VẬT
-// ──────────────────────────────────────────────────────────────────────────────
+// ─── 5. RELATIONSHIP ────────────────────────────────────────────────────────
 export interface Relationship {
+  id: string;
   targetCharacterId: string;
   relationType: string;
-  description: string;
+  description?: string;
 }
 
-// ──────────────────────────────────────────────────────────────────────────────
-// 3. ẢNH THAM CHIẾU NHÂN VẬT
-// ──────────────────────────────────────────────────────────────────────────────
-export interface CharacterImage {
-  id: string;
-  dataUrl: string;
-  label: string;
-  description: string;
-  source: 'ai' | 'manual';
-}
-
-// ──────────────────────────────────────────────────────────────────────────────
-// 4. DÒNG THỜI GIAN (CharacterTimelineEntry)
-// ──────────────────────────────────────────────────────────────────────────────
-export interface CharacterTimelineEntry {
-  id: string;
-  order: number;
-  chapterLabel: string;
-  category: string;
-  content: string;
-  relatedCharacterId?: string;
-}
-
-// ──────────────────────────────────────────────────────────────────────────────
-// 4.5. FASHION STYLE - THỜI TRANG NHÂN VẬT
-// ──────────────────────────────────────────────────────────────────────────────
+// ─── 6. FASHION STYLE ──────────────────────────────────────────────────────
 export interface FashionStyle {
   id: string;
   name: string;
-  context: string;
-  description: string;
-  colorPalette: string;
-  material: string;
-  significance: string;
-  source: 'ai' | 'manual';
+  context?: string;
+  description?: string;
+  colorPalette?: string;
+  material?: string;
+  significance?: string;
+  source: 'manual' | 'ai';
 }
 
-// ──────────────────────────────────────────────────────────────────────────────
-// 4.6. ABILITY - NĂNG LỰC/KỸ NĂNG
-// ──────────────────────────────────────────────────────────────────────────────
+// ─── 7. ABILITY ─────────────────────────────────────────────────────────────
 export interface Ability {
   id: string;
   name: string;
   type: string;
-  description: string;
-  condition: string;
-  origin: string;
-  tier: string;
+  description?: string;
+  level?: string;
+  condition?: string;
+  origin?: string;
+  tier?: string;
 }
 
-// ──────────────────────────────────────────────────────────────────────────────
-// 4.7. SPECIES TRAITS - ĐẶC ĐIỂM CHỦNG LOÀI
-// ──────────────────────────────────────────────────────────────────────────────
-export interface SpeciesAbility {
-  name: string;
-  description: string;
-  trigger: string;
-}
-
+// ─── 8. SPECIES TRAITS ─────────────────────────────────────────────────────
+// Tất cả field đều bắt buộc (non-optional) vì SpeciesTraitsEditor luôn khởi tạo đầy đủ
+// Chỉ object cha (WorldEntity.speciesTraits?) mới có thể undefined
 export interface SpeciesTraits {
   appearance: string;
   size: string;
@@ -87,7 +118,11 @@ export interface SpeciesTraits {
   behavior: string;
   temperament: string;
   intelligence: string;
-  abilities: SpeciesAbility[];
+  abilities: {
+    name: string;
+    description: string;
+    trigger: string;
+  }[];
   habitat: string;
   diet: string;
   weakness: string;
@@ -96,200 +131,211 @@ export interface SpeciesTraits {
   rarity: string;
 }
 
-// ──────────────────────────────────────────────────────────────────────────────
-// 4.8. SEXUAL LEXICON - BỘ TỪ VỰNG MIÊU TẢ
-// ──────────────────────────────────────────────────────────────────────────────
-export interface SexualLexicon {
-  maleParts: string[];
-  femaleParts: string[];
-  actions: string[];
-  dominantActions: string[];
-  states: string[];
-  otherStates: string[];
-  moanSounds: string[];
-  sexSounds: string[];
-  sexExpressions: string[];
-  sexFluids: string[];
-}
-
-// ──────────────────────────────────────────────────────────────────────────────
-// 5. SỰ KIỆN CỐT TRUYỆN TOÀN CỤC (StoryEvent)
-// ──────────────────────────────────────────────────────────────────────────────
-export interface StoryEvent {
+// ─── 9. CHARACTER TIMELINE ENTRY ──────────────────────────────────────────
+export interface CharacterTimelineEntry {
   id: string;
-  chapterId?: string;
   order: number;
-  chapterLabel: string;
-  title: string;
+  chapterLabel?: string;
+  category: string;
   content: string;
-  relatedCharacterIds?: string[];
+  relatedCharacterId?: string;
 }
 
-// ──────────────────────────────────────────────────────────────────────────────
-// 6. NHÂN VẬT (Character)
-// ──────────────────────────────────────────────────────────────────────────────
+// ─── 10. CHARACTER IMAGE ──────────────────────────────────────────────────
+// Tất cả field đều bắt buộc vì CharacterImageGallery luôn set đủ khi tạo mới
+export interface CharacterImage {
+  id: string;
+  url?: string;
+  dataUrl?: string;
+  prompt?: string;
+  createdAt?: number;
+  label: string;
+  description: string;
+  source: 'manual' | 'ai';
+}
+
+// ─── 11. CHARACTER ─────────────────────────────────────────────────────────
 export interface Character {
   id: string;
   name: string;
-  gender: string;
-  age: string;
   role: string;
-  appearance: string;
-  personality: string;
-  backStory: string;
-  currentStatus: string;
-  additionalInfo: string;
-  currentData?: string; // Dữ liệu hiện hữu — cập nhật theo diễn biến, KHÔNG ghi đè hồ sơ gốc
-  relationships: Relationship[];
-  images: CharacterImage[];
-  timeline?: CharacterTimelineEntry[];
+  gender: string;
+  age?: string;
+  species?: string;
+  personality?: string;
+  appearance?: string;
+  background?: string;
+  avatar?: string;
+  currentData?: string;
+  appearedAtPoint?: number;
+  appearedAtOrder?: number;
+  order?: number;
   firstAppearanceOrder?: number;
-  originalQuotes?: string[];
-  source?: 'ai' | 'manual' | 'original' | 'merged';
+  relationships?: Relationship[];
   fashionStyles?: FashionStyle[];
   abilities?: Ability[];
+  speciesTraits?: SpeciesTraits;
+  timeline?: CharacterTimelineEntry[];
+  images?: CharacterImage[];
+  secretTags?: string[];
+  customAttributes?: Record<string, string>;
+  backStory?: string;
+  currentStatus?: string;
+  additionalInfo?: string;
+  [key: string]: any;
 }
 
-// ──────────────────────────────────────────────────────────────────────────────
-// 7. THỰC THỂ THẾ GIỚI (WorldEntity)
-// ──────────────────────────────────────────────────────────────────────────────
+// ─── 12. WORLD ENTITY ──────────────────────────────────────────────────────
 export interface WorldEntity {
   id: string;
   name: string;
   type: string;
   description: string;
+  appearedAtPoint?: number;
+  appearedAtOrder?: number;
+  order?: number;
   firstAppearanceOrder?: number;
-  additionalInfo?: string;
-  currentData?: string; // Dữ liệu hiện hữu — cập nhật theo diễn biến, KHÔNG ghi đè mô tả gốc
-  timeline?: CharacterTimelineEntry[];
-  speciesTraits?: SpeciesTraits;
+  relatedCharacters?: string[];
+  speciesTraits?: SpeciesTraits; // Optional ở tầng cha
+  currentData?: string;
+  [key: string]: any;
 }
 
-// ──────────────────────────────────────────────────────────────────────────────
-// 8. CẤU HÌNH TRUYỆN (NovelConfig)
-// ──────────────────────────────────────────────────────────────────────────────
-export interface NovelConfig {
-  title: string;
-  genres: string[];
-  customGenre: string;
-  context: string;
-  nsfwEnabled: boolean;
-  intenseSmutEnabled: boolean;
-  writingStyle: string;
-  customStyle: string;
-  referenceFileContent: string;
-  referenceFileName: string;
-  originalNarrativeVoice?: string;
-  targetPOVMode?: 'giu_nguyen' | 'ngoi_3_gioi_han' | 'ngoi_3_toan_tri' | 'ngoi_2';
-  currentStoryPoint?: {
-    order: number;
-    label: string;
-  };
-  writeMode?: 'continue' | 'rewrite' | 'scene' | 'reborn' | 'fresh';
-  sourceSceneText?: string;
-  rebornCharacterId?: string;
-  selectedEventId?: string;
-}
-
-// ──────────────────────────────────────────────────────────────────────────────
-// 9. LORE & TÀI NGUYÊN TRUYỆN
-// ──────────────────────────────────────────────────────────────────────────────
-export interface LoreEntry {
+// ─── 13. STORY EVENT ───────────────────────────────────────────────────────
+export interface StoryEvent {
   id: string;
-  category: string;
+  chapterId?: string;
+  chapterLabel: string;
+  order: number;
   title: string;
   content: string;
+  keyCharacters?: string[];
+  location?: string;
+  relatedCharacterIds?: string[];
+  [key: string]: any;
 }
 
-// ──────────────────────────────────────────────────────────────────────────────
-// 10. RÀNG BUỘC CỨNG (HardRules)
-// ──────────────────────────────────────────────────────────────────────────────
-export interface HardRules {
-  noSelfEnding: boolean;
-  noNewCharacters: boolean;
-  noOffTopicContent: boolean;
-  noUnmentionedRefs: boolean;
-  noFakeIntensity: boolean;
-  noTimeskip: boolean;
-  noRepeatContent: boolean;
-  noMetaComments: boolean;
-  noOOCPersonality: boolean;
-  noModernSlangInAncient: boolean;
-  noAncientToneInModern: boolean;
-  noAbruptResolution: boolean;
-  noSummaryMode: boolean;
-  noExcessiveEllipsis: boolean;
-  noFutureCharacters: boolean;
-  noSelfAddPlot: boolean;
-  noDangerousTone: boolean;
-  noAddScene: boolean;
-  noSkipNoAvoid: boolean;
-  requireDetailedSexScene: boolean;
-  // 👇 3 RULE MỚI
-  noThematicClosingLine: boolean;  // Cấm câu tổng kết/tuyên ngôn giữa chừng
-  noSparseDialogue: boolean;       // Bắt buộc đối thoại tối thiểu 30%
-  requireBodyDetail: boolean;      // Bắt buộc miêu tả cơ thể khi nhân vật xuất hiện
-}
-
-// ──────────────────────────────────────────────────────────────────────────────
-// 11. QUY TẮC VIẾT (WritingRules)
-// ──────────────────────────────────────────────────────────────────────────────
-export interface WritingRules {
-  forbidden: string;
-  mandatory: string;
-  minWords: number;
-  consistencyRules: string;
-  hardRules: HardRules;
-  loreEntries: LoreEntry[];
-  sexualLexicon?: SexualLexicon;
-}
-
-// ──────────────────────────────────────────────────────────────────────────────
-// 12. CHƯƠNG TRUYỆN (Chapter)
-// ──────────────────────────────────────────────────────────────────────────────
+// ─── 14. CHAPTER ────────────────────────────────────────────────────────────
 export interface Chapter {
   id: string;
   title: string;
   content: string;
-  prompt: string;
-  outline: string;
+  summary?: string;
+  createdAt?: number;
+  updatedAt?: number;
+  wordCount?: number;
+  [key: string]: any;
 }
 
-// ──────────────────────────────────────────────────────────────────────────────
-// 13. STATE TỔNG (NovelState)
-// ──────────────────────────────────────────────────────────────────────────────
+// ─── 15. STORY POINT ───────────────────────────────────────────────────────
+export interface StoryPoint {
+  order: number;
+  label: string;
+}
+
+// ─── 16. CUSTOM GENRE TAG ──────────────────────────────────────────────────
+export interface CustomGenreTag {
+  id: string;
+  label: string;
+  kind: 'setting' | 'trope' | 'mood';
+  closestPresetId?: string;
+}
+
+// ─── 17. NOVEL CONFIG ──────────────────────────────────────────────────────
+export interface NovelConfig {
+  title: string;
+  genres: string[];
+  customGenre?: string;
+  context?: string;
+  nsfwEnabled?: boolean;
+  intenseSmutEnabled?: boolean;
+  writingStyle?: string;
+  customStyle?: string;
+  referenceFileContent?: string;
+  referenceFileName?: string;
+  
+  // ── Bối cảnh & Thể loại ──
+  settingId: string;
+  tropeTags: string[];
+  moodTags: string[];
+  customTags: CustomGenreTag[];
+  
+  // ── AI Expand ──
+  contextAiExpanded?: string;
+  
+  // ── Foundation ──
+  foundationIdea?: string;
+  foundationLockedAt?: number;
+  
+  // ── Xưng hô & Address Terms ──
+  addressTermSetId?: string;
+  customAddressTerms?: Partial<AddressTermSet>;
+  
+  // ── Các field cũ ──
+  currentStoryPoint?: StoryPoint;
+  [key: string]: any;
+}
+
+// ─── 18. NOVEL RULES ──────────────────────────────────────────────────────
+export interface NovelRules {
+  forbidden?: string;
+  mandatory?: string;
+  minWords?: number;
+  consistencyRules?: string;
+  hardRules?: HardRules;
+  loreEntries?: LoreEntry[];
+  sexualLexicon?: SexualLexicon;
+  [key: string]: any;
+}
+
+// ─── 19. NOVEL STATE ──────────────────────────────────────────────────────
 export interface NovelState {
   config: NovelConfig;
   characters: Character[];
   worldEntities: WorldEntity[];
-  rules: WritingRules;
+  rules: NovelRules;
   chapters: Chapter[];
-  currentChapterId: string | null;
+  currentChapterId?: string;
   apiKeys: ApiKeyConfig[];
   storyEvents: StoryEvent[];
+  [key: string]: any;
 }
 
-// ──────────────────────────────────────────────────────────────────────────────
-// 14. DEFAULT STATE - CẬP NHẬT VỚI 3 RULE MỚI
-// ──────────────────────────────────────────────────────────────────────────────
-export const defaultNovelState: NovelState = {
+// ─── 20. HELPER: FILTER BY CURRENT POINT ─────────────────────────────────
+export function filterByCurrentPoint<
+  T extends { order?: number; appearedAtOrder?: number; appearedAtPoint?: number; firstAppearanceOrder?: number }
+>(items: T[] | undefined | null, currentOrder?: number): T[] {
+  if (!items) return [];
+  if (currentOrder === undefined || currentOrder === null) return items;
+  return items.filter(item => {
+    const itemOrder = item.firstAppearanceOrder ?? item.appearedAtPoint ?? item.appearedAtOrder ?? item.order;
+    if (itemOrder === undefined || itemOrder === null) return true;
+    return itemOrder <= currentOrder;
+  });
+}
+
+// ─── 21. MAKE INITIAL STATE ────────────────────────────────────────────────
+export const makeInitialState = (title = ''): NovelState => ({
   config: {
-    title: '',
+    title,
     genres: [],
     customGenre: '',
     context: '',
-    nsfwEnabled: false,
-    intenseSmutEnabled: false,
+    nsfwEnabled: true,
+    intenseSmutEnabled: true,
     writingStyle: '',
     customStyle: '',
     referenceFileContent: '',
     referenceFileName: '',
-    originalNarrativeVoice: '',
-    targetPOVMode: 'giu_nguyen',
-    writeMode: 'continue',
-    sourceSceneText: '',
-    rebornCharacterId: '',
-    selectedEventId: '',
+    settingId: '',
+    tropeTags: [],
+    moodTags: [],
+    customTags: [],
+    contextAiExpanded: '',
+    foundationIdea: '',
+    foundationLockedAt: undefined,
+    addressTermSetId: '',
+    customAddressTerms: undefined,
   },
   characters: [],
   worldEntities: [],
@@ -299,138 +345,107 @@ export const defaultNovelState: NovelState = {
     minWords: 1500,
     consistencyRules: '',
     hardRules: {
-      noSelfEnding: false,
-      noNewCharacters: false,
-      noOffTopicContent: false,
-      noUnmentionedRefs: false,
-      noFakeIntensity: false,
-      noTimeskip: false,
-      noRepeatContent: false,
-      noMetaComments: false,
-      noOOCPersonality: false,
-      noModernSlangInAncient: false,
+      noSelfEnding: true,
+      noNewCharacters: true,
+      noOffTopicContent: true,
+      noUnmentionedRefs: true,
+      noFakeIntensity: true,
+      noTimeskip: true,
+      noRepeatContent: true,
+      noMetaComments: true,
+      noOOCPersonality: true,
+      noModernSlangInAncient: true,
       noAncientToneInModern: false,
-      noAbruptResolution: false,
-      noSummaryMode: false,
-      noExcessiveEllipsis: false,
-      noFutureCharacters: false,
-      noSelfAddPlot: false,
-      noDangerousTone: false,
-      noAddScene: false,
-      noSkipNoAvoid: false,
-      requireDetailedSexScene: false,
-      // 👇 3 RULE MỚI - MẶC ĐỊNH FALSE
-      noThematicClosingLine: false,
-      noSparseDialogue: false,
-      requireBodyDetail: false,
+      noAbruptResolution: true,
+      noSummaryMode: true,
+      noExcessiveEllipsis: true,
+      noFutureCharacters: true,
+      noSelfAddPlot: true,
+      noDangerousTone: true,
+      noAddScene: true,
+      noSkipNoAvoid: true,
+      requireDetailedSexScene: true,
+      noThematicClosingLine: true,
+      noSparseDialogue: true,
+      requireBodyDetail: true,
+      noDetailInconsistency: true,
     },
     loreEntries: [],
     sexualLexicon: undefined,
   },
   chapters: [],
-  currentChapterId: null,
+  currentChapterId: '',
   apiKeys: [],
   storyEvents: [],
-};
+});
 
-// ──────────────────────────────────────────────────────────────────────────────
-// 15. HELPER: Kiểm tra visible theo mốc
-// ──────────────────────────────────────────────────────────────────────────────
-export function isVisibleByCurrentPoint(
-  item: { firstAppearanceOrder?: number } | { order?: number },
-  currentOrder?: number
-): boolean {
-  if (currentOrder === undefined) return true;
-  
-  if ('firstAppearanceOrder' in item && item.firstAppearanceOrder !== undefined) {
-    return item.firstAppearanceOrder <= currentOrder;
-  }
-  
-  if ('order' in item && item.order !== undefined) {
-    return item.order <= currentOrder;
-  }
-  
-  return true;
-}
+// ─── 22. DEFAULT STATE ─────────────────────────────────────────────────────
+export const defaultNovelState = makeInitialState();
 
-// ──────────────────────────────────────────────────────────────────────────────
-// 16. HELPER: Lọc mảng theo mốc
-// ──────────────────────────────────────────────────────────────────────────────
-export function filterByCurrentPoint<T extends { firstAppearanceOrder?: number } | { order?: number }>(
-  items: T[],
-  currentOrder?: number
-): T[] {
-  if (currentOrder === undefined) return items;
-  return items.filter(item => isVisibleByCurrentPoint(item, currentOrder));
-}
+// ─── 23. MIGRATE NOVEL STATE ──────────────────────────────────────────────
+export function migrateNovelState(raw: any): NovelState {
+  if (!raw || typeof raw !== 'object') {
+    return makeInitialState();
+  }
 
-// ──────────────────────────────────────────────────────────────────────────────
-// 17. HELPER: Kiểm tra chất lượng dự án
-// ──────────────────────────────────────────────────────────────────────────────
-export function validateProjectQuality(state: NovelState): {
-  isValid: boolean;
-  issues: string[];
-  warnings: string[];
-} {
-  const issues: string[] = [];
-  const warnings: string[] = [];
-  
-  if (!state.config?.referenceFileContent || state.config.referenceFileContent.length < 1000) {
-    warnings.push('⚠️ Thiếu dữ liệu gốc (referenceFileContent) - Chức năng "Viết lại" sẽ không hoạt động');
-  }
-  
-  if (!state.characters || state.characters.length === 0) {
-    issues.push('❌ Chưa có nhân vật nào');
-  }
-  
-  if (!state.chapters || state.chapters.length === 0) {
-    issues.push('❌ Chưa có chương nào');
-  }
-  
-  if (!state.storyEvents || state.storyEvents.length === 0) {
-    warnings.push('⚠️ Chưa có sự kiện cốt truyện (storyEvents)');
-  }
-  
-  return { isValid: issues.length === 0, issues, warnings };
-}
+  const initial = makeInitialState(raw.config?.title || '');
 
-// ──────────────────────────────────────────────────────────────────────────────
-// 18. HELPER: Lấy danh sách rule đang bật - CẬP NHẬT
-// ──────────────────────────────────────────────────────────────────────────────
-export function getActiveRules(hardRules: HardRules): string[] {
-  const active: string[] = [];
-  const ruleLabels: Record<keyof HardRules, string> = {
-    noSelfEnding: 'Cấm tự kết thúc cảnh',
-    noNewCharacters: 'Cấm tự tạo nhân vật mới',
-    noOffTopicContent: 'Cấm viết ngoài yêu cầu',
-    noUnmentionedRefs: 'Cấm nhắc nhân vật không đề cập',
-    noFakeIntensity: 'Cấm câu từ kích tính giả',
-    noTimeskip: 'Cấm nhảy cóc thời gian',
-    noRepeatContent: 'Cấm lặp lại nội dung',
-    noMetaComments: 'Cấm chú thích meta',
-    noOOCPersonality: 'Cấm OOC tính cách',
-    noModernSlangInAncient: 'Cấm slang hiện đại trong cổ trang',
-    noAncientToneInModern: 'Cấm từ cổ lỗi trong truyện hiện đại',
-    noAbruptResolution: 'Cấm tự giải quyết xung đột',
-    noSummaryMode: 'Cấm tóm tắt',
-    noExcessiveEllipsis: 'Cấm dùng "..." thay thế',
-    noFutureCharacters: 'Cấm nhắc nhân vật chưa xuất hiện',
-    noSelfAddPlot: 'Cấm tự thêm tình tiết mới',
-    noDangerousTone: 'Cấm câu từ đe dọa, xáo rỗng',
-    noAddScene: 'Cấm tự thêm cảnh mới',
-    noSkipNoAvoid: 'Cấm lảng tránh, né tránh cảnh H',
-    requireDetailedSexScene: 'Bắt buộc viết chi tiết cảnh H',
-    // 👇 3 RULE MỚI
-    noThematicClosingLine: 'Cấm câu tổng kết/tuyên ngôn giữa chừng',
-    noSparseDialogue: 'Bắt buộc đối thoại tối thiểu 30%',
-    requireBodyDetail: 'Bắt buộc miêu tả cơ thể khi nhân vật xuất hiện',
-  };
-  
-  Object.entries(hardRules).forEach(([key, value]) => {
-    if (value && ruleLabels[key as keyof HardRules]) {
-      active.push(ruleLabels[key as keyof HardRules]);
+  // ── Xử lý settingId ưu tiên: từ raw.config.settingId hoặc raw.config.addressTermSetId ──
+  const settingId = raw.config?.settingId || raw.config?.addressTermSetId || '';
+
+  // ── Xử lý customTags ──
+  let customTags: CustomGenreTag[] = [];
+  if (Array.isArray(raw.config?.customTags)) {
+    // Nếu customTags là string[] cũ, chuyển sang CustomGenreTag[]
+    if (raw.config.customTags.length > 0 && typeof raw.config.customTags[0] === 'string') {
+      customTags = raw.config.customTags.map((label: string) => ({
+        id: `migrated_${Date.now()}_${Math.random().toString(36).substr(2, 4)}`,
+        label,
+        kind: 'trope' as const,
+        closestPresetId: undefined,
+      }));
+    } else {
+      customTags = raw.config.customTags;
     }
-  });
-  
-  return active;
+  }
+
+  // ── Xử lý genres → tropeTags fallback ──
+  const migratedGenres = Array.isArray(raw.config?.genres) ? raw.config.genres : [];
+  const migratedTropeTags = Array.isArray(raw.config?.tropeTags) ? raw.config.tropeTags : [];
+  const migratedMoodTags = Array.isArray(raw.config?.moodTags) ? raw.config.moodTags : [];
+
+  // Nếu tropeTags và moodTags đều rỗng, nhưng genres có dữ liệu → copy genres vào tropeTags
+  const finalTropeTags = migratedTropeTags.length === 0 && migratedMoodTags.length === 0 && migratedGenres.length > 0
+    ? [...migratedGenres]
+    : migratedTropeTags;
+
+  return {
+    ...initial,
+    ...raw,
+    config: {
+      ...initial.config,
+      ...(raw.config || {}),
+      settingId,
+      genres: migratedGenres,
+      tropeTags: finalTropeTags,
+      moodTags: migratedMoodTags,
+      customTags,
+      addressTermSetId: raw.config?.addressTermSetId || '',
+      customAddressTerms: raw.config?.customAddressTerms || undefined,
+    },
+    characters: Array.isArray(raw.characters) ? raw.characters : [],
+    worldEntities: Array.isArray(raw.worldEntities) ? raw.worldEntities : [],
+    rules: {
+      ...initial.rules,
+      ...(raw.rules || {}),
+      hardRules: {
+        ...initial.rules.hardRules,
+        ...(raw.rules?.hardRules || {}),
+      },
+      loreEntries: Array.isArray(raw.rules?.loreEntries) ? raw.rules.loreEntries : [],
+    },
+    chapters: Array.isArray(raw.chapters) ? raw.chapters : [],
+    apiKeys: Array.isArray(raw.apiKeys) ? raw.apiKeys : [],
+    storyEvents: Array.isArray(raw.storyEvents) ? raw.storyEvents : [],
+  };
 }

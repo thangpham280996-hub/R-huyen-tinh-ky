@@ -6,11 +6,29 @@ import {
 } from 'lucide-react';
 import { NovelState, Character, Relationship, WorldEntity, CharacterImage, CharacterTimelineEntry, StoryEvent, FashionStyle, Ability, SpeciesTraits } from '../types';
 import { callApi } from '../utils/api';
+import { SETTING_OPTIONS } from './genreTaxonomy';
 
 interface Page3CharactersProps {
   state: NovelState;
   updateState: (updater: (prev: NovelState) => void) => void;
   onNavigate: (tabId: string) => void;
+}
+
+// ─── HELPER: buildGenreContextLabel ──────────────────────────────────────
+function buildGenreContextLabel(config: {
+  settingId?: string;
+  tropeTags?: string[];
+  moodTags?: string[];
+  genres?: string[];
+}): string[] {
+  const settingLabel = SETTING_OPTIONS.find(o => o.id === config.settingId)?.label;
+  const parts = [
+    ...(settingLabel ? [settingLabel] : []),
+    ...(config.tropeTags || []),
+    ...(config.moodTags || []),
+  ];
+  if (parts.length > 0) return parts;
+  return config.genres || [];
 }
 
 // ─── Vai trò ──────────────────────────────────────────────────────────────
@@ -30,7 +48,6 @@ const ROLES = [
   { value: 'Nhân vật phụ', label: 'Nhân vật phụ' },
 ];
 
-// ✅ B1: Thêm bảng ánh xạ quan hệ ngược
 const INVERSE_RELATION_MAP: Record<string, string> = {
   'Người yêu': 'Người yêu',
   'Vợ': 'Chồng',
@@ -90,7 +107,6 @@ const QUICK_PROMPTS = [
   '2 nhân vật phụ hài hước, trung thành với nam chính',
 ];
 
-// ─── HẰNG SỐ CHO ABILITY ──────────────────────────────────────────────────
 const ABILITY_TYPES = [
   { value: 'Công kích', color: 'red' },
   { value: 'Phòng thủ', color: 'blue' },
@@ -99,7 +115,6 @@ const ABILITY_TYPES = [
   { value: 'Bị động', color: 'gray' },
 ];
 
-// ─── UTILITY: ensureString ──────────────────────────────────────────────
 function ensureString(val: any): string {
   if (val === null || val === undefined) return '';
   if (typeof val === 'object') {
@@ -117,7 +132,7 @@ function ensureString(val: any): string {
   return String(val);
 }
 
-// ─── HÀM GỌI API: generateStoryEventsFromAI ─────────────────────────────
+// ─── HÀM GỌI API ──────────────────────────────────────────────────────────
 async function generateStoryEventsFromAI(
   prompt: string,
   quantity: number,
@@ -127,7 +142,6 @@ async function generateStoryEventsFromAI(
   apiKeys: any[]
 ): Promise<Omit<StoryEvent, 'id'>[]> {
   const activeKey = apiKeys.find((k: any) => k.isActive && !k.quotaExceeded) || null;
-
   const sortedEvents = [...existingEvents].sort((a, b) => a.order - b.order);
   const lastOrder = sortedEvents.length ? sortedEvents[sortedEvents.length - 1].order : 0;
   const recentContext = sortedEvents.slice(-15)
@@ -166,7 +180,6 @@ Mỗi phần tử gồm: order (số), chapterLabel (nhãn ngắn, VD "Chương 
   }
 
   const data = await callApi('generate', body);
-
   let text = (data.text || '').trim().normalize('NFC').replace(/```json\n?/g, '').replace(/```\n?/g, '').trim();
   const match = text.match(/\[[\s\S]*\]/);
   if (!match) throw new Error('AI không trả về JSON hợp lệ. Thử lại.');
@@ -182,7 +195,6 @@ Mỗi phần tử gồm: order (số), chapterLabel (nhãn ngắn, VD "Chương 
   }));
 }
 
-// ─── HÀM GỌI API: generateCharactersFromAI ──────────────────────────────
 async function generateCharactersFromAI(
   prompt: string,
   novelContext: { title: string; genres: string[]; context: string; nsfwEnabled: boolean; existingChars: string[] },
@@ -190,7 +202,6 @@ async function generateCharactersFromAI(
   refAppearanceHint?: string
 ): Promise<Omit<Character, 'id'>[]> {
   const activeKey = apiKeys.find((k: any) => k.isActive && !k.quotaExceeded) || null;
-
   const refBlock = refAppearanceHint?.trim()
     ? `\n\n[THAM KHẢO TỪ ẢNH MẪU — ưu tiên áp dụng nhan sắc/vóc dáng/thần thái mô tả dưới đây cho nhân vật mới; PHẦN TRANG PHỤC chỉ là GU THẨM MỸ tham khảo, KHÔNG bắt buộc sao chép y nguyên — hãy sáng tạo trang phục đa dạng phù hợp với gu đó]:\n${refAppearanceHint.trim()}`
     : '';
@@ -231,12 +242,10 @@ Trả về JSON array. Ví dụ format:
   }
 
   const data = await callApi('generate', body);
-
   let text = (data.text || '').trim().normalize('NFC');
   text = text.replace(/```json\n?/g, '').replace(/```\n?/g, '').trim();
   const match = text.match(/\[[\s\S]*\]/);
   if (!match) throw new Error('AI không trả về JSON hợp lệ. Thử lại.');
-
   const parsed = JSON.parse(match[0]);
   if (!Array.isArray(parsed)) throw new Error('Định dạng JSON không hợp lệ.');
 
@@ -258,7 +267,6 @@ Trả về JSON array. Ví dụ format:
   }));
 }
 
-// ─── HÀM GỌI API: generateWorldEntitiesFromAI ───────────────────────────
 async function generateWorldEntitiesFromAI(
   prompt: string,
   quantity: number,
@@ -267,7 +275,6 @@ async function generateWorldEntitiesFromAI(
   apiKeys: any[]
 ): Promise<Omit<WorldEntity, 'id'>[]> {
   const activeKey = apiKeys.find((k: any) => k.isActive && !k.quotaExceeded) || null;
-
   const categoryBlock = categories.length
     ? `CHỈ tạo các mục thuộc đúng (những) loại sau: ${categories.join(', ')}. Nếu có nhiều loại, phân bổ đa dạng giữa các loại đó.`
     : `Có thể tạo đa dạng nhiều loại khác nhau (khái niệm, địa danh/địa điểm, vật phẩm, chủng tộc, nguyên tắc/quy tắc thế giới, tông môn, gia tộc, hệ thống, hoặc loại khác phù hợp) — đừng tạo toàn 1 loại.`;
@@ -304,12 +311,10 @@ Mỗi phần tử gồm đúng 3 trường: name (tên ngắn gọn), type (lo�
   }
 
   const data = await callApi('generate', body);
-
   let text = (data.text || '').trim().normalize('NFC');
   text = text.replace(/```json\n?/g, '').replace(/```\n?/g, '').trim();
   const match = text.match(/\[[\s\S]*\]/);
   if (!match) throw new Error('AI không trả về JSON hợp lệ. Thử lại.');
-
   const parsed = JSON.parse(match[0]);
   if (!Array.isArray(parsed)) throw new Error('Định dạng JSON không hợp lệ.');
 
@@ -320,14 +325,12 @@ Mỗi phần tử gồm đúng 3 trường: name (tên ngắn gọn), type (lo�
   }));
 }
 
-// ─── HÀM MỚI: generateFashionStyleFromAI ──────────────────────────────────
 async function generateFashionStyleFromAI(
   prompt: string,
   characterContext: { name: string; gender: string; role: string },
   apiKeys: any[]
 ): Promise<Omit<FashionStyle, 'id' | 'source'>> {
   const activeKey = apiKeys.find((k: any) => k.isActive && !k.quotaExceeded) || null;
-
   const systemPrompt = `Bạn là AI thiết kế trang phục cho nhân vật tiểu thuyết mạng Việt Nam.
 Nhân vật: ${characterContext.name || 'Chưa đặt tên'} (${characterContext.gender}, ${characterContext.role})
 
@@ -356,7 +359,6 @@ colorPalette (tông màu), material (chất liệu), significance (ý nghĩa/ngu
   }
 
   const data = await callApi('generate', body);
-
   let text = (data.text || '').trim().normalize('NFC').replace(/```json\n?/g, '').replace(/```\n?/g, '').trim();
   const match = text.match(/\{[\s\S]*\}/);
   if (!match) throw new Error('AI không trả về JSON hợp lệ. Thử lại.');
@@ -372,14 +374,12 @@ colorPalette (tông màu), material (chất liệu), significance (ý nghĩa/ngu
   };
 }
 
-// ─── HÀM MỚI: analyzeFashionImageWithAI ───────────────────────────────────
 async function analyzeFashionImageWithAI(
   dataUrl: string,
   characterContext: { name: string; gender: string; role: string },
   apiKeys: any[]
 ): Promise<Omit<FashionStyle, 'id' | 'source'>> {
   const activeKey = apiKeys.find((k: any) => k.isActive && !k.quotaExceeded) || null;
-
   const systemPrompt = `Bạn là AI phân tích trang phục từ ảnh cho nhân vật tiểu thuyết mạng Việt Nam.
 Nhân vật: ${characterContext.name || 'Chưa đặt tên'} (${characterContext.gender}, ${characterContext.role})
 Nhiệm vụ: Nhìn ảnh, mô tả bộ trang phục trong ảnh thành dữ liệu có cấu trúc.
@@ -404,7 +404,6 @@ Gồm: name, context, description, colorPalette, material, significance (để t
   }
 
   const data = await callApi('generate', body);
-
   let text = (data.text || '').trim().normalize('NFC').replace(/```json\n?/g, '').replace(/```\n?/g, '').trim();
   const match = text.match(/\{[\s\S]*\}/);
   if (!match) throw new Error('AI không trả về JSON hợp lệ. Thử lại.');
@@ -420,7 +419,6 @@ Gồm: name, context, description, colorPalette, material, significance (để t
   };
 }
 
-// ─── HÀM MỚI: generateSpeciesTraitsFromAI ──────────────────────────────────
 async function generateSpeciesTraitsFromAI(
   prompt: string,
   entityName: string,
@@ -428,7 +426,6 @@ async function generateSpeciesTraitsFromAI(
   apiKeys: any[]
 ): Promise<SpeciesTraits> {
   const activeKey = apiKeys.find((k: any) => k.isActive && !k.quotaExceeded) || null;
-
   const systemPrompt = `Bạn là AI xây dựng chủng loài (yêu thú, quái vật, chủng tộc...) cho tiểu thuyết mạng Việt Nam.
 Truyện: "${novelContext.title || 'Chưa đặt tên'}"
 Thể loại: ${novelContext.genres.join(', ') || 'Chưa chọn'}
@@ -473,7 +470,6 @@ Tạo 2-4 chiêu sức trong "abilities" nếu phù hợp.`;
   }
 
   const data = await callApi('generate', body);
-
   let text = (data.text || '').trim().normalize('NFC').replace(/```json\n?/g, '').replace(/```\n?/g, '').trim();
   const match = text.match(/\{[\s\S]*\}/);
   if (!match) throw new Error('AI không trả về JSON hợp lệ. Thử lại.');
@@ -498,14 +494,12 @@ Tạo 2-4 chiêu sức trong "abilities" nếu phù hợp.`;
   };
 }
 
-// ─── HÀM MỚI: analyzeSpeciesImageWithAI ────────────────────────────────────
 async function analyzeSpeciesImageWithAI(
   dataUrl: string,
   entityName: string,
   apiKeys: any[]
 ): Promise<SpeciesTraits> {
   const activeKey = apiKeys.find((k: any) => k.isActive && !k.quotaExceeded) || null;
-
   const systemPrompt = `Bạn là AI phân tích ảnh sinh vật/quái vật cho tiểu thuyết mạng Việt Nam.
 Tên loài: ${entityName || 'Chưa đặt tên'}
 Nhiệm vụ: Nhìn ảnh, suy luận đặc điểm chủng loài.
@@ -530,7 +524,6 @@ Trả về JSON object đúng cấu trúc (để trống trường nào ảnh kh
   }
 
   const data = await callApi('generate', body);
-
   let text = (data.text || '').trim().normalize('NFC').replace(/```json\n?/g, '').replace(/```\n?/g, '').trim();
   const match = text.match(/\{[\s\S]*\}/);
   if (!match) throw new Error('AI không trả về JSON hợp lệ. Thử lại.');
@@ -555,7 +548,6 @@ Trả về JSON object đúng cấu trúc (để trống trường nào ảnh kh
   };
 }
 
-// ─── HÀM: resizeImage ────────────────────────────────────────────────────
 function resizeImage(file: File, maxDim = 800): Promise<string> {
   return new Promise((resolve, reject) => {
     const reader = new FileReader();
@@ -586,7 +578,7 @@ function resizeImage(file: File, maxDim = 800): Promise<string> {
   });
 }
 
-// ─── COMPONENT: StoryTimelineEditor ─────────────────────────────────────
+// ─── COMPONENT CON: StoryTimelineEditor ──────────────────────────────────
 function StoryTimelineEditor({
   events,
   onChange,
@@ -610,9 +602,7 @@ function StoryTimelineEditor({
     content: '',
     relatedCharacterIds: [],
   });
-
   const [confirmingDeleteId, setConfirmingDeleteId] = useState<string | null>(null);
-
   const [aiExpanded, setAiExpanded] = useState(false);
   const [aiPrompt, setAiPrompt] = useState('');
   const [aiQuantity, setAiQuantity] = useState(3);
@@ -621,17 +611,17 @@ function StoryTimelineEditor({
   const [aiPreview, setAiPreview] = useState<Omit<StoryEvent, 'id'>[]>([]);
   const [aiSelected, setAiSelected] = useState<Set<number>>(new Set());
 
-  const sorted = [...events].sort((a, b) => a.order - b.order);
+  const sorted = [...events].sort((a, b) => (a.order || 0) - (b.order || 0));
   const filtered = search.trim()
     ? sorted.filter(e =>
-        e.title.toLowerCase().includes(search.toLowerCase()) ||
-        e.content.toLowerCase().includes(search.toLowerCase()) ||
-        e.chapterLabel.toLowerCase().includes(search.toLowerCase())
+        (e.title || '').toLowerCase().includes(search.toLowerCase()) ||
+        (e.content || '').toLowerCase().includes(search.toLowerCase()) ||
+        (e.chapterLabel || '').toLowerCase().includes(search.toLowerCase())
       )
     : sorted;
 
   const startAdd = () => {
-    const maxOrder = events.length ? Math.max(...events.map(e => e.order)) : 0;
+    const maxOrder = events.length ? Math.max(...events.map(e => e.order || 0)) : 0;
     setDraft({
       order: maxOrder + 1,
       chapterLabel: '',
@@ -679,7 +669,7 @@ function StoryTimelineEditor({
       const cur = prev.relatedCharacterIds || [];
       return {
         ...prev,
-        relatedCharacterIds: cur.includes(id) ? cur.filter(x => x !== id) : [...cur, id],
+        relatedCharacterIds: cur.includes(id) ? cur.filter((x: string) => x !== id) : [...cur, id],
       };
     });
   };
@@ -695,7 +685,7 @@ function StoryTimelineEditor({
         aiPrompt,
         Math.max(1, Math.min(15, aiQuantity || 1)),
         novelContext,
-        events.map(e => ({ order: e.order, chapterLabel: e.chapterLabel, title: e.title, content: e.content })),
+        events.map(e => ({ order: e.order || 0, chapterLabel: e.chapterLabel || '', title: e.title || '', content: e.content || '' })),
         characters.map(c => c.name),
         apiKeys
       );
@@ -706,6 +696,22 @@ function StoryTimelineEditor({
     } finally {
       setAiLoading(false);
     }
+  };
+
+  const updateAiPreviewItem = (idx: number, field: 'title' | 'content', value: string) => {
+    setAiPreview(prev => prev.map((e, i) => i === idx ? { ...e, [field]: value } : e));
+  };
+
+  const removeAiPreviewItem = (idx: number) => {
+    setAiPreview(prev => prev.filter((_, i) => i !== idx));
+    setAiSelected(prev => {
+      const next = new Set<number>();
+      prev.forEach(i => {
+        if (i < idx) next.add(i);
+        else if (i > idx) next.add(i - 1);
+      });
+      return next;
+    });
   };
 
   const handleImportAiSelected = () => {
@@ -741,7 +747,6 @@ function StoryTimelineEditor({
         chính xác thay vì chỉ suy luận qua thông tin rời rạc của từng nhân vật.
       </p>
 
-      {/* Panel AI Tạo Sự Kiện */}
       <div className="bg-gradient-to-br from-amber-950/20 via-neutral-900 to-neutral-900 border border-amber-700/30 rounded-xl overflow-hidden">
         <button
           onClick={() => setAiExpanded(!aiExpanded)}
@@ -804,9 +809,9 @@ function StoryTimelineEditor({
                     {aiSelected.size === aiPreview.length ? 'Bỏ chọn tất cả' : 'Chọn tất cả'}
                   </button>
                 </div>
-                <div className="space-y-1.5 max-h-56 overflow-y-auto">
+                <div className="space-y-1.5 max-h-72 overflow-y-auto">
                   {aiPreview.map((e, i) => (
-                    <label key={i} className="flex items-start gap-2 p-2 bg-neutral-950/60 border border-neutral-800 rounded-lg cursor-pointer hover:border-amber-900/50">
+                    <div key={i} className="flex items-start gap-2 p-2 bg-neutral-950/60 border border-neutral-800 rounded-lg hover:border-amber-900/50">
                       <input
                         type="checkbox"
                         checked={aiSelected.has(i)}
@@ -815,13 +820,33 @@ function StoryTimelineEditor({
                           n.has(i) ? n.delete(i) : n.add(i);
                           return n;
                         })}
-                        className="mt-0.5 accent-amber-600 shrink-0"
+                        className="mt-2 accent-amber-600 shrink-0"
                       />
-                      <div className="min-w-0 flex-1">
-                        <p className="text-[11px] font-semibold text-gray-200">#{e.order} · {e.title}</p>
-                        <p className="text-[10px] text-gray-500 leading-relaxed">{e.content}</p>
+                      <div className="min-w-0 flex-1 space-y-1">
+                        <div className="flex items-center gap-1.5">
+                          <span className="text-[9px] font-mono text-amber-500 shrink-0">#{e.order}</span>
+                          <input
+                            value={e.title}
+                            onChange={ev => updateAiPreviewItem(i, 'title', ev.target.value)}
+                            className="flex-1 bg-neutral-900 border border-neutral-700 rounded p-1 text-[11px] font-semibold text-gray-200 focus:outline-none focus:border-amber-600"
+                          />
+                        </div>
+                        <textarea
+                          rows={2}
+                          value={e.content}
+                          onChange={ev => updateAiPreviewItem(i, 'content', ev.target.value)}
+                          className="w-full bg-neutral-900 border border-neutral-700 rounded p-1.5 text-[10px] text-gray-300 focus:outline-none focus:border-amber-600 resize-y leading-relaxed"
+                        />
                       </div>
-                    </label>
+                      <button
+                        type="button"
+                        onClick={() => removeAiPreviewItem(i)}
+                        className="p-1 text-gray-500 hover:text-red-400 shrink-0 mt-1"
+                        title="Xoá khỏi danh sách chờ"
+                      >
+                        <Trash2 className="w-3.5 h-3.5" />
+                      </button>
+                    </div>
                   ))}
                 </div>
                 <button
@@ -937,7 +962,7 @@ function StoryTimelineEditor({
         <div className="space-y-1.5 max-h-72 overflow-y-auto">
           {filtered.map(ev => {
             const relatedNames = (ev.relatedCharacterIds || [])
-              .map(id => characters.find(c => c.id === id)?.name)
+              .map((id: string) => characters.find(c => c.id === id)?.name)
               .filter(Boolean);
             return (
               <div key={ev.id} className="flex items-start gap-2 p-2 bg-neutral-900/60 border border-neutral-800 rounded-lg hover:border-amber-900/40 transition-colors">
@@ -986,7 +1011,7 @@ function StoryTimelineEditor({
   );
 }
 
-// ─── COMPONENT: CharacterTimelineEditor ─────────────────────────────────
+// ─── COMPONENT CON: CharacterTimelineEditor ─────────────────────────────
 function CharacterTimelineEditor({
   entries,
   onChange,
@@ -1007,13 +1032,12 @@ function CharacterTimelineEditor({
     content: '',
     relatedCharacterId: '',
   });
-
   const [confirmingDeleteId, setConfirmingDeleteId] = useState<string | null>(null);
 
-  const sorted = [...entries].sort((a, b) => a.order - b.order);
+  const sorted = [...entries].sort((a, b) => (a.order || 0) - (b.order || 0));
 
   const startAdd = () => {
-    const maxOrder = entries.length ? Math.max(...entries.map(e => e.order)) : 0;
+    const maxOrder = entries.length ? Math.max(...entries.map(e => e.order || 0)) : 0;
     setDraft({
       order: maxOrder + 1,
       chapterLabel: '',
@@ -1207,7 +1231,7 @@ function CharacterTimelineEditor({
   );
 }
 
-// ─── COMPONENT: AbilityEditor ──────────────────────────────────────────
+// ─── COMPONENT CON: AbilityEditor ──────────────────────────────────────
 function AbilityEditor({
   abilities,
   onChange,
@@ -1220,7 +1244,6 @@ function AbilityEditor({
   const [draft, setDraft] = useState<Omit<Ability, 'id'>>({
     name: '', type: 'Công kích', description: '', condition: '', origin: '', tier: '',
   });
-
   const [confirmingDeleteId, setConfirmingDeleteId] = useState<string | null>(null);
 
   const startAdd = () => {
@@ -1334,7 +1357,7 @@ function AbilityEditor({
             return (
               <div key={a.id} className="p-2 bg-neutral-950 border border-neutral-800 rounded-lg hover:border-neutral-700 transition-colors">
                 <div className="flex items-center justify-between mb-1">
-                  <span className={`text-[9px] px-1.5 py-0.5 rounded ${typeBadgeClass[a.type] || 'bg-gray-950/50 text-gray-400 border-gray-800/40'} border`}>
+                  <span className={`text-[9px] px-1.5 py-0.5 rounded ${typeBadgeClass[a.type || ''] || 'bg-gray-950/50 text-gray-400 border-gray-800/40'} border`}>
                     {a.type}
                   </span>
                   <div className="flex gap-1">
@@ -1367,7 +1390,7 @@ function AbilityEditor({
   );
 }
 
-// ─── COMPONENT: FashionStyleGallery ──────────────────────────────────────
+// ─── COMPONENT CON: FashionStyleGallery ─────────────────────────────────
 function FashionStyleGallery({
   styles,
   onChange,
@@ -1385,9 +1408,7 @@ function FashionStyleGallery({
   const [draft, setDraft] = useState<Omit<FashionStyle, 'id' | 'source'>>({
     name: '', context: '', description: '', colorPalette: '', material: '', significance: '',
   });
-
   const [confirmingDeleteId, setConfirmingDeleteId] = useState<string | null>(null);
-
   const [aiOpen, setAiOpen] = useState(false);
   const [aiPrompt, setAiPrompt] = useState('');
   const [aiLoading, setAiLoading] = useState(false);
@@ -1404,7 +1425,7 @@ function FashionStyleGallery({
 
   const startEdit = (s: FashionStyle) => {
     setDraft({ name: s.name, context: s.context, description: s.description, colorPalette: s.colorPalette, material: s.material, significance: s.significance });
-    setDraftSource(s.source);
+    setDraftSource((s.source as 'manual' | 'ai') || 'manual');
     setEditingId(s.id);
     setShowForm(true);
   };
@@ -1597,7 +1618,7 @@ function FashionStyleGallery({
   );
 }
 
-// ─── COMPONENT: SpeciesTraitsEditor ──────────────────────────────────────
+// ─── COMPONENT CON: SpeciesTraitsEditor ─────────────────────────────────
 function SpeciesTraitsEditor({
   traits,
   onChange,
@@ -1618,9 +1639,7 @@ function SpeciesTraitsEditor({
     abilities: [], habitat: '', diet: '', weakness: '', drops: '',
     threatLevel: '', rarity: '',
   });
-
   const [confirmingDelete, setConfirmingDelete] = useState(false);
-
   const [aiOpen, setAiOpen] = useState(false);
   const [aiPrompt, setAiPrompt] = useState('');
   const [aiLoading, setAiLoading] = useState(false);
@@ -1632,22 +1651,29 @@ function SpeciesTraitsEditor({
     if (traits) setDraft(traits);
   }, [traits]);
 
-  const handleSave = () => {
-    onChange(draft);
-    setShowForm(false);
+  // ─── PATCH: đồng bộ dữ liệu ngay lập tức ──────────────────────────────
+  const updateDraft = (patch: Partial<SpeciesTraits>) => {
+    const next = { ...draft, ...patch };
+    setDraft(next);
+    onChange(next);
   };
 
-  const updateAbility = (idx: number, field: keyof SpeciesTraits['abilities'][0], value: string) => {
-    const next = { ...draft, abilities: draft.abilities.map((a, i) => i === idx ? { ...a, [field]: value } : a) };
-    setDraft(next);
+  const updateAbility = (idx: number, field: string, value: string) => {
+    updateDraft({ abilities: (draft.abilities || []).map((a: any, i: number) => i === idx ? { ...a, [field]: value } : a) });
   };
 
   const addAbility = () => {
-    setDraft({ ...draft, abilities: [...draft.abilities, { name: '', description: '', trigger: '' }] });
+    updateDraft({ abilities: [...(draft.abilities || []), { name: '', description: '', trigger: '' }] });
   };
 
   const removeAbility = (idx: number) => {
-    setDraft({ ...draft, abilities: draft.abilities.filter((_, i) => i !== idx) });
+    updateDraft({ abilities: (draft.abilities || []).filter((_: any, i: number) => i !== idx) });
+  };
+
+  const handleSave = () => {
+    // onChange đã được gọi qua updateDraft mỗi khi thay đổi
+    // nên chỉ cần đóng form
+    setShowForm(false);
   };
 
   const handleAIGenerateTraits = async () => {
@@ -1657,6 +1683,7 @@ function SpeciesTraitsEditor({
     try {
       const result = await generateSpeciesTraitsFromAI(aiPrompt, entityName, novelContext, apiKeys);
       setDraft(result);
+      onChange(result); // đồng bộ ngay
     } catch (err: any) {
       setAiError(err.message || 'Lỗi không xác định.');
     } finally {
@@ -1673,6 +1700,7 @@ function SpeciesTraitsEditor({
       const dataUrl = await resizeImage(file);
       const result = await analyzeSpeciesImageWithAI(dataUrl, entityName, apiKeys);
       setDraft(result);
+      onChange(result); // đồng bộ ngay
     } catch (err: any) {
       setImgError(err.message || 'Lỗi phân tích ảnh');
     } finally {
@@ -1732,7 +1760,7 @@ function SpeciesTraitsEditor({
 
       {showForm ? (
         <div className="p-3 bg-neutral-950/60 border border-emerald-900/40 rounded-xl space-y-2">
-          <div className="flex gap-1.5">
+          <div className="flex gap-1.5 sticky top-0 z-10 bg-neutral-950/95 backdrop-blur-sm pb-1.5 -mx-3 px-3 pt-1">
             <button type="button" onClick={() => setAiOpen(!aiOpen)} className="flex-1 py-1.5 bg-teal-950/40 border border-teal-800/40 hover:border-teal-600/60 rounded-lg text-[10px] text-teal-300 flex items-center justify-center gap-1 transition-colors">
               <Sparkles className="w-3 h-3" /> AI Sáng Tạo Từ Mô Tả
             </button>
@@ -1762,29 +1790,29 @@ function SpeciesTraitsEditor({
           {imgError && <div className="px-2 py-1.5 bg-red-950/30 border border-red-800/40 rounded-lg text-[9px] text-red-300">⚠ {imgError}</div>}
 
           <p className="text-[9px] text-gray-500">Ngoại hình & Đặc điểm</p>
-          <div className="grid grid-cols-2 gap-2">
-            <input value={draft.appearance} onChange={e => setDraft({ ...draft, appearance: e.target.value })} placeholder="Ngoại hình chung" className="w-full bg-neutral-900 border border-neutral-700 rounded-lg p-1.5 text-[11px] text-gray-200 focus:outline-none" />
-            <input value={draft.size} onChange={e => setDraft({ ...draft, size: e.target.value })} placeholder="Kích thước" className="w-full bg-neutral-900 border border-neutral-700 rounded-lg p-1.5 text-[11px] text-gray-200 focus:outline-none" />
+          <div className="grid grid-cols-1 sm:grid-cols-2 gap-2">
+            <textarea rows={2} value={draft.appearance} onChange={e => updateDraft({ appearance: e.target.value })} placeholder="Ngoại hình chung" className="w-full bg-neutral-900 border border-neutral-700 rounded-lg p-2 text-[12px] text-gray-200 focus:outline-none resize-y leading-relaxed" />
+            <textarea rows={2} value={draft.size} onChange={e => updateDraft({ size: e.target.value })} placeholder="Kích thước" className="w-full bg-neutral-900 border border-neutral-700 rounded-lg p-2 text-[12px] text-gray-200 focus:outline-none resize-y leading-relaxed" />
           </div>
-          <input value={draft.distinguishing} onChange={e => setDraft({ ...draft, distinguishing: e.target.value })} placeholder="Đặc điểm nhận dạng (đuôi chia 3 ngọn, mắt vàng...)" className="w-full bg-neutral-900 border border-neutral-700 rounded-lg p-1.5 text-[11px] text-gray-200 focus:outline-none" />
+          <textarea rows={2} value={draft.distinguishing} onChange={e => updateDraft({ distinguishing: e.target.value })} placeholder="Đặc điểm nhận dạng (đuôi chia 3 ngọn, mắt vàng...)" className="w-full bg-neutral-900 border border-neutral-700 rounded-lg p-2 text-[12px] text-gray-200 focus:outline-none resize-y leading-relaxed" />
 
           <p className="text-[9px] text-gray-500 pt-1">Tập tính</p>
-          <div className="grid grid-cols-3 gap-2">
-            <input value={draft.behavior} onChange={e => setDraft({ ...draft, behavior: e.target.value })} placeholder="Hành vi (sống bầy đàn...)" className="w-full bg-neutral-900 border border-neutral-700 rounded-lg p-1.5 text-[11px] text-gray-200 focus:outline-none" />
-            <input value={draft.temperament} onChange={e => setDraft({ ...draft, temperament: e.target.value })} placeholder="Tính khí" className="w-full bg-neutral-900 border border-neutral-700 rounded-lg p-1.5 text-[11px] text-gray-200 focus:outline-none" />
-            <input value={draft.intelligence} onChange={e => setDraft({ ...draft, intelligence: e.target.value })} placeholder="Trí thông minh" className="w-full bg-neutral-900 border border-neutral-700 rounded-lg p-1.5 text-[11px] text-gray-200 focus:outline-none" />
+          <div className="grid grid-cols-1 sm:grid-cols-3 gap-2">
+            <textarea rows={2} value={draft.behavior} onChange={e => updateDraft({ behavior: e.target.value })} placeholder="Hành vi (sống bầy đàn...)" className="w-full bg-neutral-900 border border-neutral-700 rounded-lg p-2 text-[12px] text-gray-200 focus:outline-none resize-y leading-relaxed" />
+            <textarea rows={2} value={draft.temperament} onChange={e => updateDraft({ temperament: e.target.value })} placeholder="Tính khí" className="w-full bg-neutral-900 border border-neutral-700 rounded-lg p-2 text-[12px] text-gray-200 focus:outline-none resize-y leading-relaxed" />
+            <textarea rows={2} value={draft.intelligence} onChange={e => updateDraft({ intelligence: e.target.value })} placeholder="Trí thông minh" className="w-full bg-neutral-900 border border-neutral-700 rounded-lg p-2 text-[12px] text-gray-200 focus:outline-none resize-y leading-relaxed" />
           </div>
 
-          <p className="text-[9px] text-gray-500 pt-1">Chiêu sức ({draft.abilities.length})</p>
-          <div className="space-y-1.5">
-            {draft.abilities.map((a, i) => (
-              <div key={i} className="p-2 bg-neutral-900 border border-neutral-800 rounded-lg space-y-1">
-                <div className="flex gap-2">
-                  <input value={a.name} onChange={e => updateAbility(i, 'name', e.target.value)} placeholder="Tên chiêu" className="flex-1 bg-neutral-950 border border-neutral-700 rounded p-1 text-[11px] text-gray-200 focus:outline-none" />
-                  <input value={a.trigger} onChange={e => updateAbility(i, 'trigger', e.target.value)} placeholder="Kích hoạt khi nào" className="flex-1 bg-neutral-950 border border-neutral-700 rounded p-1 text-[11px] text-gray-200 focus:outline-none" />
-                  <button onClick={() => removeAbility(i)} className="p-1 text-gray-500 hover:text-red-400"><Trash2 className="w-3 h-3" /></button>
+          <p className="text-[9px] text-gray-500 pt-1">Chiêu sức ({draft.abilities?.length || 0})</p>
+          <div className="space-y-2">
+            {(draft.abilities || []).map((a: any, i: number) => (
+              <div key={i} className="p-2.5 bg-neutral-900 border border-neutral-800 rounded-lg space-y-1.5">
+                <div className="flex items-center justify-between gap-2">
+                  <input value={a.name} onChange={e => updateAbility(i, 'name', e.target.value)} placeholder="Tên chiêu" className="flex-1 bg-neutral-950 border border-neutral-700 rounded p-1.5 text-[12px] font-semibold text-gray-200 focus:outline-none" />
+                  <button onClick={() => removeAbility(i)} className="p-1 text-gray-500 hover:text-red-400 shrink-0"><Trash2 className="w-3.5 h-3.5" /></button>
                 </div>
-                <textarea value={a.description} onChange={e => updateAbility(i, 'description', e.target.value)} placeholder="Mô tả chiêu thức..." rows={2} className="w-full bg-neutral-950 border border-neutral-700 rounded p-1 text-[11px] text-gray-200 focus:outline-none resize-none" />
+                <input value={a.trigger} onChange={e => updateAbility(i, 'trigger', e.target.value)} placeholder="Kích hoạt khi nào" className="w-full bg-neutral-950 border border-neutral-700 rounded p-1.5 text-[11px] text-amber-300/80 focus:outline-none" />
+                <textarea value={a.description} onChange={e => updateAbility(i, 'description', e.target.value)} placeholder="Mô tả chiêu thức..." rows={3} className="w-full bg-neutral-950 border border-neutral-700 rounded p-1.5 text-[12px] text-gray-200 focus:outline-none resize-y leading-relaxed" />
               </div>
             ))}
             <button onClick={addAbility} className="w-full py-1 bg-neutral-900 border border-neutral-800 hover:border-emerald-800/40 rounded-lg text-[10px] text-gray-400 hover:text-emerald-300 flex items-center justify-center gap-1 transition-colors">
@@ -1794,23 +1822,25 @@ function SpeciesTraitsEditor({
 
           <p className="text-[9px] text-gray-500 pt-1">Sinh thái & Nguy hiểm</p>
           <div className="grid grid-cols-2 gap-2">
-            <input value={draft.habitat} onChange={e => setDraft({ ...draft, habitat: e.target.value })} placeholder="Môi trường sống" className="w-full bg-neutral-900 border border-neutral-700 rounded-lg p-1.5 text-[11px] text-gray-200 focus:outline-none" />
-            <input value={draft.diet} onChange={e => setDraft({ ...draft, diet: e.target.value })} placeholder="Thức ăn" className="w-full bg-neutral-900 border border-neutral-700 rounded-lg p-1.5 text-[11px] text-gray-200 focus:outline-none" />
-            <input value={draft.weakness} onChange={e => setDraft({ ...draft, weakness: e.target.value })} placeholder="Điểm yếu" className="w-full bg-neutral-900 border border-neutral-700 rounded-lg p-1.5 text-[11px] text-gray-200 focus:outline-none" />
-            <input value={draft.drops} onChange={e => setDraft({ ...draft, drops: e.target.value })} placeholder="Vật phẩm rơi ra" className="w-full bg-neutral-900 border border-neutral-700 rounded-lg p-1.5 text-[11px] text-gray-200 focus:outline-none" />
-            <input value={draft.threatLevel} onChange={e => setDraft({ ...draft, threatLevel: e.target.value })} placeholder="Cấp độ nguy hiểm" className="w-full bg-neutral-900 border border-neutral-700 rounded-lg p-1.5 text-[11px] text-gray-200 focus:outline-none" />
-            <input value={draft.rarity} onChange={e => setDraft({ ...draft, rarity: e.target.value })} placeholder="Độ hiếm" className="w-full bg-neutral-900 border border-neutral-700 rounded-lg p-1.5 text-[11px] text-gray-200 focus:outline-none" />
+            <textarea rows={2} value={draft.habitat} onChange={e => updateDraft({ habitat: e.target.value })} placeholder="Môi trường sống" className="w-full bg-neutral-900 border border-neutral-700 rounded-lg p-2 text-[12px] text-gray-200 focus:outline-none resize-y leading-relaxed" />
+            <textarea rows={2} value={draft.diet} onChange={e => updateDraft({ diet: e.target.value })} placeholder="Thức ăn" className="w-full bg-neutral-900 border border-neutral-700 rounded-lg p-2 text-[12px] text-gray-200 focus:outline-none resize-y leading-relaxed" />
+            <textarea rows={2} value={draft.weakness} onChange={e => updateDraft({ weakness: e.target.value })} placeholder="Điểm yếu" className="w-full bg-neutral-900 border border-neutral-700 rounded-lg p-2 text-[12px] text-gray-200 focus:outline-none resize-y leading-relaxed" />
+            <textarea rows={2} value={draft.drops} onChange={e => updateDraft({ drops: e.target.value })} placeholder="Vật phẩm rơi ra" className="w-full bg-neutral-900 border border-neutral-700 rounded-lg p-2 text-[12px] text-gray-200 focus:outline-none resize-y leading-relaxed" />
+            <textarea rows={2} value={draft.threatLevel} onChange={e => updateDraft({ threatLevel: e.target.value })} placeholder="Cấp độ nguy hiểm" className="w-full bg-neutral-900 border border-neutral-700 rounded-lg p-2 text-[12px] text-gray-200 focus:outline-none resize-y leading-relaxed" />
+            <textarea rows={2} value={draft.rarity} onChange={e => updateDraft({ rarity: e.target.value })} placeholder="Độ hiếm" className="w-full bg-neutral-900 border border-neutral-700 rounded-lg p-2 text-[12px] text-gray-200 focus:outline-none resize-y leading-relaxed" />
           </div>
 
           <div className="flex justify-end gap-2 pt-1">
             <button 
               onClick={() => { 
-                setDraft(traits || { 
+                const reverted = traits || { 
                   appearance: '', size: '', distinguishing: '', 
                   behavior: '', temperament: '', intelligence: '', 
                   abilities: [], habitat: '', diet: '', weakness: '', drops: '', 
                   threatLevel: '', rarity: '' 
-                }); 
+                }; 
+                setDraft(reverted);
+                onChange(traits);
                 setShowForm(false); 
               }} 
               className="px-2.5 py-1 text-[10px] text-gray-400 hover:bg-neutral-800 rounded-lg"
@@ -1833,7 +1863,7 @@ function SpeciesTraitsEditor({
   );
 }
 
-// ─── COMPONENT: CharacterImageGallery ────────────────────────────────────
+// ─── COMPONENT CON: CharacterImageGallery ──────────────────────────────
 function CharacterImageGallery({
   images,
   onChange,
@@ -1854,10 +1884,8 @@ function CharacterImageGallery({
   const [includeBackground, setIncludeBackground] = useState(false);
   const [genOpen, setGenOpen] = useState(false);
   const [genPrompt, setGenPrompt] = useState('');
-  const [genModel, setGenModel] = useState('gemini-2.5-flash-image');
   const [genLoading, setGenLoading] = useState(false);
   const [genError, setGenError] = useState<string | null>(null);
-
   const [confirmingDeleteId, setConfirmingDeleteId] = useState<string | null>(null);
 
   const handleGenerateImage = async () => {
@@ -1873,7 +1901,6 @@ function CharacterImageGallery({
           personality: characterContext.personality || '',
         },
         genPrompt,
-        genModel,
         apiKeys
       );
       onChange([...images, {
@@ -1893,7 +1920,6 @@ function CharacterImageGallery({
   const generateCharacterImageAI = async (
     _context: any,
     _extraPrompt: string,
-    _modelName: string,
     _apiKeys: any[]
   ): Promise<{ dataUrl: string }> => {
     return { dataUrl: 'data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAYAAAAfFcSJAAAADUlEQVR42mNkYPhfDwAChwGA60e6kgAAAABJRU5ErkJggg==' };
@@ -1934,7 +1960,7 @@ function CharacterImageGallery({
     setError(null);
     try {
       const hint = hints[imgId] || '';
-      const desc = await analyzeImageWithAI(img.dataUrl, characterContext, apiKeys, hint, includeBackground);
+      const desc = await analyzeImageWithAI(img.dataUrl || img.url || '', characterContext, apiKeys, hint, includeBackground);
       onChange(images.map(i => i.id === imgId ? { ...i, description: desc, source: 'ai' as const } : i));
       setHintId(null);
     } catch (err: any) {
@@ -2152,8 +2178,6 @@ export default function Page3Characters({ state, updateState, onNavigate }: Page
 
   const [isAddingChar, setIsAddingChar] = useState(false);
   const [editingCharId, setEditingCharId] = useState<string | null>(null);
-  
-  // ✅ B7: Thêm currentData vào charForm
   const [charForm, setCharForm] = useState<any>({
     name: '', gender: 'Nữ', age: '18', role: 'Nữ chính',
     appearance: '', personality: '', backStory: '',
@@ -2164,19 +2188,17 @@ export default function Page3Characters({ state, updateState, onNavigate }: Page
   });
 
   const [isLinkingRelation, setIsLinkingRelation] = useState<string | null>(null);
-  
-  // ✅ B2: Sửa relForm thêm reverseRelationType và reverseDescription
   const [relForm, setRelForm] = useState({
     targetCharacterId: '', relationType: 'Người tình', description: '',
     reverseRelationType: '', reverseDescription: '',
   });
   const [customRelationType, setCustomRelationType] = useState('');
 
-  const [worldPanelExpanded, setWorldPanelExpanded] = useState(false);
-  const [worldCreateMode, setWorldCreateMode] = useState<'batch' | 'detail'>('batch');
+  // ─── WORLD MODAL STATES ────────────────────────────────────────────────
+  const [worldModalOpen, setWorldModalOpen] = useState(false);
+  const [worldModalMode, setWorldModalMode] = useState<'list' | 'batch' | 'detail'>('list');
+  const [editingWorldId, setEditingWorldId] = useState<string | null>(null);
 
-  const [isAddingWorldEntity, setIsAddingWorldEntity] = useState(false);
-  // ✅ B10: Thêm currentData vào worldForm
   const [worldForm, setWorldForm] = useState<any>({
     name: '', type: 'Tông môn', description: '', currentData: '', firstAppearanceOrder: '',
     speciesTraits: undefined,
@@ -2207,13 +2229,11 @@ export default function Page3Characters({ state, updateState, onNavigate }: Page
   const [refImages, setRefImages] = useState<{ id: string; dataUrl: string }[]>([]);
   const [refAppearanceHint, setRefAppearanceHint] = useState('');
 
-  // ✅ D1: Thêm state xác nhận xóa
   const [confirmingDeleteCharId, setConfirmingDeleteCharId] = useState<string | null>(null);
   const [confirmingDeleteWorldId, setConfirmingDeleteWorldId] = useState<string | null>(null);
   const [confirmingClearCharData, setConfirmingClearCharData] = useState(false);
   const [confirmingClearWorldData, setConfirmingClearWorldData] = useState(false);
 
-  // ✅ B7: resetCharForm có currentData
   const resetCharForm = () => setCharForm({
     name: '', gender: 'Nữ', age: '18', role: 'Nữ chính',
     appearance: '', personality: '', backStory: '',
@@ -2223,6 +2243,34 @@ export default function Page3Characters({ state, updateState, onNavigate }: Page
     fashionStyles: [],
   });
 
+  // ─── WORLD HELPERS ──────────────────────────────────────────────────────
+  const resetWorldForm = () => setWorldForm({
+    name: '', type: 'Tông môn', description: '', currentData: '', firstAppearanceOrder: '',
+    speciesTraits: undefined,
+  });
+
+  const openWorldModalForCreate = () => {
+    resetWorldForm();
+    setEditingWorldId(null);
+    setWorldModalMode(worldEntities.length > 0 ? 'list' : 'batch');
+    setWorldModalOpen(true);
+  };
+
+  const openWorldEntityForEdit = (w: WorldEntity) => {
+    setWorldForm({
+      name: w.name,
+      type: w.type,
+      description: w.description || '',
+      currentData: w.currentData || '',
+      firstAppearanceOrder: w.firstAppearanceOrder !== undefined ? String(w.firstAppearanceOrder) : '',
+      speciesTraits: w.speciesTraits,
+    });
+    setEditingWorldId(w.id);
+    setWorldModalMode('detail');
+    setWorldModalOpen(true);
+  };
+
+  // ─── CHARACTER HANDLERS ────────────────────────────────────────────────
   const handleSaveCharacter = () => {
     if (!charForm.name.trim()) { alert('Tên nhân vật không được bỏ trống!'); return; }
     const { firstAppearanceOrder, ...rest } = charForm;
@@ -2235,7 +2283,7 @@ export default function Page3Characters({ state, updateState, onNavigate }: Page
         const idx = prev.characters.findIndex((c) => c.id === editingCharId);
         if (idx !== -1) prev.characters[idx] = { ...prev.characters[idx], ...charToSave };
       } else {
-        prev.characters.push({ id: Math.random().toString(36).substr(2, 9), ...charToSave });
+        prev.characters.push({ id: Math.random().toString(36).substr(2, 9), ...charToSave } as Character);
       }
     });
     resetCharForm();
@@ -2243,7 +2291,6 @@ export default function Page3Characters({ state, updateState, onNavigate }: Page
     setEditingCharId(null);
   };
 
-  // ✅ B8: Nạp currentData khi sửa
   const handleEditCharacterClick = (c: Character) => {
     setCharForm({
       name: c.name, gender: c.gender, age: c.age, role: c.role,
@@ -2262,18 +2309,17 @@ export default function Page3Characters({ state, updateState, onNavigate }: Page
   const handleDeleteCharacter = (id: string) => {
     updateState((prev) => {
       prev.characters = prev.characters.filter((c) => c.id !== id);
-      prev.characters.forEach((c) => { c.relationships = c.relationships.filter((r) => r.targetCharacterId !== id); });
+      prev.characters.forEach((c) => { c.relationships = (c.relationships || []).filter((r) => r.targetCharacterId !== id); });
     });
     setConfirmingDeleteCharId(null);
   };
 
-  // ✅ B5: handleAddRelationship ghi cả 2 chiều
   const handleAddRelationship = (sourceCharId: string) => {
     if (!relForm.targetCharacterId) { alert('Chọn nhân vật mục tiêu!'); return; }
     const finalRelationType = relForm.relationType === '__custom__'
       ? (customRelationType.trim() || 'Quan hệ khác')
       : relForm.relationType;
-    const finalReverseType = relForm.reverseRelationType.trim() || finalRelationType;
+    const finalReverseType = relForm.reverseRelationType.trim() || guessInverseRelation(finalRelationType);
 
     updateState((prev) => {
       const source = prev.characters.find((c) => c.id === sourceCharId);
@@ -2285,6 +2331,7 @@ export default function Page3Characters({ state, updateState, onNavigate }: Page
 
       source.relationships = source.relationships.filter((r) => r.targetCharacterId !== relForm.targetCharacterId);
       source.relationships.push({
+        id: Math.random().toString(36).substr(2, 9),
         targetCharacterId: relForm.targetCharacterId,
         relationType: finalRelationType,
         description: relForm.description,
@@ -2292,9 +2339,10 @@ export default function Page3Characters({ state, updateState, onNavigate }: Page
 
       target.relationships = target.relationships.filter((r) => r.targetCharacterId !== sourceCharId);
       target.relationships.push({
+        id: Math.random().toString(36).substr(2, 9),
         targetCharacterId: sourceCharId,
         relationType: finalReverseType,
-        description: relForm.description,
+        description: relForm.reverseDescription || relForm.description,
       });
     });
 
@@ -2303,19 +2351,26 @@ export default function Page3Characters({ state, updateState, onNavigate }: Page
     setIsLinkingRelation(null);
   };
 
-  // ✅ B10: reset worldForm có currentData
+  // ─── WORLD HANDLERS ────────────────────────────────────────────────────
   const handleSaveWorldEntity = () => {
     if (!worldForm.name.trim()) { alert('Tên không được trống!'); return; }
     const { firstAppearanceOrder, speciesTraits, ...rest } = worldForm;
+    const payload = {
+      ...rest,
+      speciesTraits,
+      firstAppearanceOrder: firstAppearanceOrder.trim() ? Number(firstAppearanceOrder) : undefined,
+    };
     updateState((prev) => {
-      prev.worldEntities.push({
-        id: Math.random().toString(36).substr(2, 9),
-        ...rest,
-        speciesTraits: speciesTraits,
-        firstAppearanceOrder: firstAppearanceOrder.trim() ? Number(firstAppearanceOrder) : undefined,
-      });
+      if (editingWorldId) {
+        const idx = prev.worldEntities.findIndex((w) => w.id === editingWorldId);
+        if (idx !== -1) prev.worldEntities[idx] = { ...prev.worldEntities[idx], ...payload };
+      } else {
+        prev.worldEntities.push({ id: Math.random().toString(36).substr(2, 9), ...payload });
+      }
     });
-    setWorldForm({ name: '', type: 'Tông môn', description: '', currentData: '', firstAppearanceOrder: '', speciesTraits: undefined });
+    resetWorldForm();
+    setEditingWorldId(null);
+    setWorldModalMode('list');
   };
 
   const handleDeleteWorldEntity = (id: string) => {
@@ -2335,9 +2390,9 @@ export default function Page3Characters({ state, updateState, onNavigate }: Page
         1,
         [worldForm.type],
         {
-          title: state.config.title,
-          genres: state.config.genres,
-          context: state.config.context,
+          title: state.config.title || '',
+          genres: buildGenreContextLabel(state.config),
+          context: state.config.context || '',
           existingNames: worldEntities.map((w) => w.name),
         },
         state.apiKeys
@@ -2362,6 +2417,22 @@ export default function Page3Characters({ state, updateState, onNavigate }: Page
     setWorldAiCustomCatInput('');
   };
 
+  const updateWorldAiPreviewItem = (idx: number, field: 'name' | 'type' | 'description', value: string) => {
+    setWorldAiPreview(prev => prev.map((w, i) => i === idx ? { ...w, [field]: value } : w));
+  };
+
+  const removeWorldAiPreviewItem = (idx: number) => {
+    setWorldAiPreview(prev => prev.filter((_, i) => i !== idx));
+    setWorldAiSelected(prev => {
+      const next = new Set<number>();
+      prev.forEach(i => {
+        if (i < idx) next.add(i);
+        else if (i > idx) next.add(i - 1);
+      });
+      return next;
+    });
+  };
+
   const handleWorldAIGenerate = async () => {
     if (!worldAiPrompt.trim()) { setWorldAiError('Hãy nhập yêu cầu!'); return; }
     setWorldAiLoading(true);
@@ -2375,9 +2446,9 @@ export default function Page3Characters({ state, updateState, onNavigate }: Page
         quantity,
         worldAiCategories,
         {
-          title: state.config.title,
-          genres: state.config.genres,
-          context: state.config.context,
+          title: state.config.title || '',
+          genres: buildGenreContextLabel(state.config),
+          context: state.config.context || '',
           existingNames: worldEntities.map((w) => w.name),
         },
         state.apiKeys
@@ -2396,15 +2467,17 @@ export default function Page3Characters({ state, updateState, onNavigate }: Page
     if (toAdd.length === 0) { setWorldAiError('Chưa chọn mục nào để nhập!'); return; }
     updateState((prev) => {
       toAdd.forEach((w) => {
-        prev.worldEntities.push({ id: Math.random().toString(36).substr(2, 9), ...w });
+        prev.worldEntities.push({ id: Math.random().toString(36).substr(2, 9), ...w } as WorldEntity);
       });
     });
     setWorldAiPreview([]);
     setWorldAiSelected(new Set());
     setWorldAiPrompt('');
     setWorldAiError(null);
+    setWorldModalMode('list');
   };
 
+  // ─── CHARACTER AI HANDLERS ─────────────────────────────────────────────
   const handleAIGenerate = async () => {
     if (!aiPrompt.trim()) { setAiError('Hãy nhập gợi ý nhân vật!'); return; }
     setAiLoading(true);
@@ -2418,10 +2491,10 @@ export default function Page3Characters({ state, updateState, onNavigate }: Page
       const chars = await generateCharactersFromAI(
         aiPrompt,
         {
-          title: state.config.title,
-          genres: state.config.genres,
-          context: state.config.context,
-          nsfwEnabled: state.config.nsfwEnabled,
+          title: state.config.title || '',
+          genres: buildGenreContextLabel(state.config),
+          context: state.config.context || '',
+          nsfwEnabled: !!state.config.nsfwEnabled,
           existingChars: characters.map(c => c.name),
         },
         state.apiKeys,
@@ -2459,7 +2532,7 @@ export default function Page3Characters({ state, updateState, onNavigate }: Page
     setReviewIdx(null);
     updateState((prev) => {
       toAdd.forEach(c => {
-        prev.characters.push({ id: Math.random().toString(36).substr(2, 9), ...c });
+        prev.characters.push({ id: Math.random().toString(36).substr(2, 9), ...c } as Character);
       });
     });
     setAiPreview([]);
@@ -2472,6 +2545,22 @@ export default function Page3Characters({ state, updateState, onNavigate }: Page
 
   const updateReviewField = (idx: number, field: keyof Omit<Character, 'id' | 'relationships'>, value: string) => {
     setReviewEdits(prev => prev.map((c, i) => i === idx ? { ...c, [field]: value } : c));
+  };
+
+  const handleRefImageUpload = async (e: React.ChangeEvent<HTMLInputElement>) => {
+    const files = e.target.files;
+    if (!files) return;
+    for (const file of Array.from(files)) {
+      if (file.type.startsWith('image/')) {
+        const dataUrl = await resizeImage(file);
+        setRefImages(prev => [...prev, { id: Math.random().toString(36).substr(2, 9), dataUrl }]);
+      }
+    }
+    e.target.value = '';
+  };
+
+  const removeRefImage = (id: string) => {
+    setRefImages(prev => prev.filter(img => img.id !== id));
   };
 
   // ─── RENDER ──────────────────────────────────────────────────────────────
@@ -2527,7 +2616,11 @@ export default function Page3Characters({ state, updateState, onNavigate }: Page
           events={state.storyEvents || []}
           onChange={(events) => updateState(prev => { prev.storyEvents = events; })}
           characters={characters}
-          novelContext={{ title: state.config.title, genres: state.config.genres, context: state.config.context }}
+          novelContext={{ 
+            title: state.config.title || '', 
+            genres: buildGenreContextLabel(state.config), 
+            context: state.config.context || '' 
+          }}
           apiKeys={state.apiKeys}
         />
       </div>
@@ -2572,6 +2665,36 @@ export default function Page3Characters({ state, updateState, onNavigate }: Page
                 spellCheck={false}
               />
             </div>
+
+            <div className="flex flex-wrap gap-2">
+              <label className="flex items-center gap-1.5 text-[10px] text-gray-500 cursor-pointer">
+                <input type="file" accept="image/*" multiple onChange={handleRefImageUpload} className="hidden" />
+                <ImagePlus className="w-3.5 h-3.5 text-violet-400" /> Thêm ảnh mẫu
+              </label>
+              {refImages.length > 0 && (
+                <div className="flex flex-wrap gap-1">
+                  {refImages.map(img => (
+                    <div key={img.id} className="relative">
+                      <img src={img.dataUrl} alt="ref" className="w-8 h-8 object-cover rounded border border-violet-700/40" />
+                      <button onClick={() => removeRefImage(img.id)} className="absolute -top-1 -right-1 w-3 h-3 bg-red-900 rounded-full flex items-center justify-center text-[8px] text-white">×</button>
+                    </div>
+                  ))}
+                </div>
+              )}
+            </div>
+
+            {refImages.length > 0 && (
+              <div>
+                <label className="block text-[10px] text-gray-500 mb-1">Gợi ý thêm cho AI từ ảnh mẫu</label>
+                <textarea
+                  rows={2}
+                  placeholder="VD: Ảnh số 1 cho thấy chất liệu lụa và tông màu trắng bạc, nên áp dụng vào ngoại hình nữ chính..."
+                  value={refAppearanceHint}
+                  onChange={e => setRefAppearanceHint(e.target.value)}
+                  className="w-full bg-neutral-950 border border-neutral-800 rounded-lg p-2 text-[11px] text-gray-300 focus:outline-none focus:border-violet-500 resize-y"
+                />
+              </div>
+            )}
 
             <div>
               <p className="text-[10px] text-gray-500 mb-2 uppercase tracking-wider">Gợi ý nhanh</p>
@@ -2928,58 +3051,54 @@ export default function Page3Characters({ state, updateState, onNavigate }: Page
                   spellCheck={false} />
               </div>
 
-              {/* ✅ B9 + D2: Ô Dữ liệu hiện hữu + nút xóa lịch sử */}
-              <div className="border-t border-cyan-900/30 pt-3">
-                <div className="flex items-center justify-between mb-1">
-                  <label className="text-xs text-cyan-300 flex items-center gap-1.5">
-                    🔄 Dữ liệu hiện hữu <span className="text-[9px] text-gray-500 font-normal">(tự động cập nhật khi bấm "Tóm tắt chương" ở trang Sáng Tác — KHÔNG ghi đè hồ sơ gốc)</span>
-                  </label>
-                  {charForm.currentData?.trim() && (
-                    confirmingClearCharData ? (
-                      <div className="flex items-center gap-1 shrink-0">
-                        <button type="button"
-                          onClick={() => { setCharForm({ ...charForm, currentData: '' }); setConfirmingClearCharData(false); }}
-                          className="text-[9px] px-1.5 py-0.5 bg-red-900/60 text-red-200 rounded">Xác nhận xóa</button>
-                        <button type="button"
-                          onClick={() => setConfirmingClearCharData(false)}
-                          className="text-[9px] px-1.5 py-0.5 bg-neutral-800 text-gray-400 rounded">Hủy</button>
-                      </div>
-                    ) : (
-                      <button type="button"
-                        onClick={() => setConfirmingClearCharData(true)}
-                        className="text-[9px] text-gray-500 hover:text-red-400 flex items-center gap-0.5 shrink-0">
-                        <Trash2 className="w-2.5 h-2.5" /> Xóa lịch sử
-                      </button>
-                    )
-                  )}
-                </div>
-                <textarea rows={5}
-                  placeholder="Sẽ tự động điền khi bạn dùng nút Tóm tắt chương ở trang Sáng Tác. Cũng có thể tự gõ tay tại đây."
-                  value={charForm.currentData || ''}
+              <div>
+                <label className="block text-xs text-gray-400 mb-1 flex items-center gap-2">
+                  🔄 Dữ liệu hiện hữu (dùng khi tạo nhân vật mới từ AI, hoặc tự nhập)
+                  <button
+                    type="button"
+                    onClick={() => {
+                      if (confirmingClearCharData) {
+                        setCharForm({ ...charForm, currentData: '' });
+                        setConfirmingClearCharData(false);
+                      } else {
+                        setConfirmingClearCharData(true);
+                      }
+                    }}
+                    className="text-[9px] px-2 py-0.5 bg-red-950/40 hover:bg-red-900/50 border border-red-800/40 rounded text-red-300 transition-colors"
+                  >
+                    {confirmingClearCharData ? 'Xác nhận xoá' : 'Xoá tất cả'}
+                  </button>
+                </label>
+                <textarea
+                  rows={6}
+                  placeholder="Dán toàn bộ dữ liệu hiện có về nhân vật này (từ file JSON, từ các tab khác...) — AI sẽ đọc để viết đúng tính cách, số phận, quá khứ, mối quan hệ, năng lực, v.v..."
+                  value={charForm.currentData}
                   onChange={(e) => setCharForm({ ...charForm, currentData: e.target.value })}
-                  className="w-full bg-neutral-950 border border-cyan-900/40 rounded-lg p-2 text-xs text-gray-200 focus:outline-none focus:border-cyan-600 resize-y whitespace-pre-wrap"
-                  spellCheck={false} />
-                <p className="text-[9px] text-gray-600 mt-1 leading-relaxed">
-                  Ghi thay đổi phát sinh khi viết (cảnh giới mới, vết thương, quan hệ thay đổi...). Không sửa trực tiếp Ngoại hình/Tính cách/Quá khứ ở trên.
+                  className="w-full bg-neutral-950 border border-neutral-800 rounded-lg p-2 text-xs text-gray-200 focus:outline-none focus:border-red-500 resize-y font-mono"
+                  spellCheck={false}
+                />
+                <p className="text-[9px] text-gray-600 mt-0.5">
+                  💡 Khi ở trang Sáng Tác, AI sẽ dùng dữ liệu này làm <strong>nguồn tham chiếu chính</strong> nếu có, thay vì các trường rời rạc bên trên.
                 </p>
               </div>
 
               <div>
-                <label className="block text-xs text-gray-400 mb-1 flex items-center gap-1">
-                  <Clock className="w-3 h-3 text-cyan-400" /> Mốc xuất hiện lần đầu (tuỳ chọn)
-                </label>
-                <input type="number" placeholder="VD: 165 (số chương nguyên tác nhân vật này lần đầu xuất hiện)"
+                <label className="block text-xs text-gray-400 mb-1">Mốc xuất hiện lần đầu (order)</label>
+                <input
+                  type="number"
+                  placeholder="VD: 15"
                   value={charForm.firstAppearanceOrder}
                   onChange={(e) => setCharForm({ ...charForm, firstAppearanceOrder: e.target.value })}
-                  className="w-full bg-neutral-950 border border-neutral-800 rounded-lg p-2 text-xs text-gray-200 focus:outline-none focus:border-cyan-600" />
-                <p className="text-[9px] text-gray-600 mt-1 leading-relaxed">
-                  Nếu đặt mốc này LỚN HƠN "Mốc hiện tại đang viết tới" (ở đầu trang), nhân vật sẽ TỰ ĐỘNG bị ẩn khỏi AI khi viết truyện — tránh lỗi nhắc đến nhân vật chưa xuất hiện.
+                  className="w-40 bg-neutral-950 border border-neutral-800 rounded-lg p-2 text-xs text-gray-200 focus:outline-none focus:border-red-500"
+                />
+                <p className="text-[9px] text-gray-600 mt-0.5">
+                  Số thứ tự sự kiện đầu tiên nhân vật xuất hiện. AI sẽ bỏ qua nhân vật này nếu mốc hiện tại nhỏ hơn.
                 </p>
               </div>
 
               <CharacterTimelineEditor
-                entries={charForm.timeline}
-                onChange={(timeline) => setCharForm({ ...charForm, timeline })}
+                entries={charForm.timeline || []}
+                onChange={(entries) => setCharForm({ ...charForm, timeline: entries })}
                 characters={characters}
                 currentCharId={editingCharId}
               />
@@ -2991,591 +3110,219 @@ export default function Page3Characters({ state, updateState, onNavigate }: Page
 
               <FashionStyleGallery
                 styles={charForm.fashionStyles || []}
-                onChange={(fashionStyles) => setCharForm({ ...charForm, fashionStyles })}
+                onChange={(styles) => setCharForm({ ...charForm, fashionStyles: styles })}
                 characterContext={{ name: charForm.name, gender: charForm.gender, role: charForm.role }}
                 apiKeys={state.apiKeys}
               />
 
-              <div className="border-t border-neutral-800 pt-4">
-                <CharacterImageGallery
-                  images={charForm.images || []}
-                  onChange={(images) => setCharForm({ ...charForm, images })}
-                  characterContext={{ name: charForm.name, gender: charForm.gender, role: charForm.role, appearance: charForm.appearance, personality: charForm.personality }}
-                  apiKeys={state.apiKeys}
-                />
-              </div>
+              <CharacterImageGallery
+                images={charForm.images || []}
+                onChange={(images) => setCharForm({ ...charForm, images })}
+                characterContext={{ name: charForm.name, gender: charForm.gender, role: charForm.role, appearance: charForm.appearance, personality: charForm.personality }}
+                apiKeys={state.apiKeys}
+              />
 
-              <div className="flex justify-end gap-2">
-                <button onClick={() => setIsAddingChar(false)} className="px-3 py-1.5 hover:bg-neutral-800 rounded-lg text-xs text-gray-400">Hủy</button>
-                <button onClick={handleSaveCharacter} className="px-5 py-1.5 bg-red-600 hover:bg-red-500 text-white rounded-lg text-xs font-semibold">Lưu</button>
+              <div className="flex justify-end gap-3 pt-2 border-t border-neutral-800">
+                <button
+                  onClick={() => { setIsAddingChar(false); setEditingCharId(null); resetCharForm(); }}
+                  className="px-4 py-2 text-xs text-gray-400 hover:text-gray-200 hover:bg-neutral-800 rounded-lg transition-colors"
+                >
+                  Hủy
+                </button>
+                <button
+                  onClick={handleSaveCharacter}
+                  className="px-5 py-2 bg-red-700 hover:bg-red-600 text-white rounded-lg text-xs font-semibold transition-colors"
+                >
+                  {editingCharId ? 'Cập nhật' : 'Lưu nhân vật'}
+                </button>
               </div>
             </div>
           )}
 
-          {characters.length === 0 ? (
-            <div className="py-12 border border-dashed border-neutral-800 rounded-xl text-center text-gray-500 text-xs">
-              Chưa có nhân vật nào. Hãy thêm thủ công hoặc dùng AI tạo nhanh bên trên!
-            </div>
-          ) : (
-            <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-              {characters.map((c) => (
-                <div key={c.id} className="bg-neutral-900 border border-neutral-800 rounded-xl p-4 hover:border-red-950/60 transition-all">
-                  <div className="flex items-start justify-between mb-2">
-                    <div className="flex items-start gap-2.5 min-w-0">
-                      {c.images && c.images.length > 0 && (
-                        <img src={c.images[0].dataUrl} alt={c.name}
-                          className="w-10 h-10 rounded-lg object-cover border border-neutral-700 shrink-0" />
-                      )}
-                      <div className="min-w-0">
-                        <h4 className="text-sm font-bold text-gray-100 truncate">{c.name}
-                          <span className={`ml-2 text-[9px] px-1.5 py-0.5 rounded font-mono ${c.gender === 'Nữ' ? 'bg-pink-950/50 text-pink-300' : 'bg-indigo-950/50 text-indigo-300'}`}>
-                            {c.gender} · {c.age}
-                          </span>
-                        </h4>
-                        <span className="text-[10px] text-amber-500 font-medium">{c.role}</span>
-                        {c.images && c.images.length > 0 && (
-                          <span className="ml-1.5 text-[9px] text-violet-400">📷 {c.images.length} ảnh</span>
-                        )}
-                        {c.timeline && c.timeline.length > 0 && (
-                          <span className="ml-1.5 text-[9px] text-cyan-400">🕒 {c.timeline.length} mốc</span>
-                        )}
-                        {c.abilities && c.abilities.length > 0 && (
-                          <span className="ml-1.5 text-[9px] text-red-400">⚔️ {c.abilities.length} kỹ năng</span>
-                        )}
-                        {c.fashionStyles && c.fashionStyles.length > 0 && (
-                          <span className="ml-1.5 text-[9px] text-pink-400">👗 {c.fashionStyles.length} trang phục</span>
-                        )}
+          {/* Danh sách nhân vật */}
+          {characters.length > 0 && (
+            <div className="space-y-3">
+              {characters.map(c => (
+                <div key={c.id} className="bg-neutral-900 border border-neutral-800 rounded-xl p-4 hover:border-red-900/40 transition-colors">
+                  <div className="flex items-start justify-between">
+                    <div className="flex-1">
+                      <div className="flex items-center gap-2 flex-wrap">
+                        <span className="text-base font-bold text-gray-200">{c.name}</span>
+                        <span className="text-[10px] px-2 py-0.5 bg-red-950/50 border border-red-800/40 rounded text-red-400">{c.role}</span>
+                        <span className="text-[10px] text-gray-500">{c.gender} · {c.age}</span>
                         {c.firstAppearanceOrder !== undefined && (
-                          <span className="ml-1.5 text-[9px] text-gray-500">· xuất hiện từ #{c.firstAppearanceOrder}</span>
+                          <span className="text-[9px] px-1.5 py-0.5 bg-cyan-950/50 border border-cyan-800/40 rounded text-cyan-400">
+                            Xuất hiện #{c.firstAppearanceOrder}
+                          </span>
                         )}
                       </div>
-                    </div>
-                    <div className="flex gap-1">
-                      <button onClick={() => handleEditCharacterClick(c)} className="p-1 text-neutral-400 hover:text-white rounded hover:bg-neutral-800">
-                        <Edit2 className="w-3.5 h-3.5" />
-                      </button>
-                      {confirmingDeleteCharId === c.id ? (
-                        <div className="flex items-center gap-1">
-                          <button onClick={() => handleDeleteCharacter(c.id)} className="text-[8px] px-1.5 py-0.5 bg-red-900/60 text-red-200 rounded">Xác nhận</button>
-                          <button onClick={() => setConfirmingDeleteCharId(null)} className="text-[8px] px-1.5 py-0.5 bg-neutral-800 text-gray-400 rounded">Hủy</button>
+                      {c.personality && (
+                        <p className="text-[10px] text-gray-400 mt-1 line-clamp-2">{c.personality}</p>
+                      )}
+                      {c.appearance && (
+                        <p className="text-[10px] text-gray-500 mt-0.5 line-clamp-1">📷 {c.appearance}</p>
+                      )}
+                      {c.relationships && c.relationships.length > 0 && (
+                        <div className="flex flex-wrap gap-1 mt-1.5">
+                          {c.relationships.map((r, idx) => {
+                            const target = characters.find(ch => ch.id === r.targetCharacterId);
+                            return target ? (
+                              <span key={idx} className="text-[9px] px-1.5 py-0.5 bg-neutral-800 border border-neutral-700 rounded text-gray-400">
+                                {target.name} · {r.relationType}
+                              </span>
+                            ) : null;
+                          })}
                         </div>
-                      ) : (
-                        <button onClick={() => setConfirmingDeleteCharId(c.id)} className="p-1 text-neutral-400 hover:text-red-400 rounded hover:bg-neutral-800">
-                          <Trash2 className="w-3.5 h-3.5" />
-                        </button>
                       )}
                     </div>
-                  </div>
-
-                  <div className="text-xs space-y-1 text-gray-400 border-t border-neutral-800 pt-2 mt-2">
-                    {c.appearance && <p className="line-clamp-1"><span className="text-gray-500">Ngoại hình:</span> {ensureString(c.appearance)}</p>}
-                    {c.personality && <p className="line-clamp-1"><span className="text-gray-500">Tính cách:</span> {ensureString(c.personality)}</p>}
-                    {c.additionalInfo && <p className="text-amber-400/70 text-[10px] line-clamp-1">✦ {ensureString(c.additionalInfo)}</p>}
-                    {/* ✅ B12: Hiển thị currentData trên card nhân vật */}
-                    {c.currentData && <p className="text-cyan-400/80 text-[10px] line-clamp-1">🔄 {ensureString(c.currentData)}</p>}
-                    {c.abilities && c.abilities.length > 0 && (
-                      <p className="text-[10px] text-red-400/70 line-clamp-1">
-                        ⚔️ {c.abilities.slice(0, 3).map(a => a.name).join(', ')}
-                        {c.abilities.length > 3 && ` +${c.abilities.length - 3}`}
-                      </p>
-                    )}
-                  </div>
-
-                  {c.relationships?.length > 0 && (
-                    <div className="mt-2 flex flex-wrap gap-1">
-                      {c.relationships.map((r, i) => {
-                        const targetName = characters.find((t) => t.id === r.targetCharacterId)?.name || '?';
-                        return (
-                          <span key={i} className="inline-flex items-center gap-1 px-1.5 py-0.5 bg-neutral-950 border border-neutral-800 rounded text-[10px] text-gray-300">
-                            <span className="text-red-400">{r.relationType}</span>
-                            <span className="text-gray-600">→</span>
-                            <span>{targetName}</span>
-                            {/* ✅ B6: Sửa nút xóa quan hệ - xóa cả 2 chiều */}
-                            <button onClick={() => updateState((prev) => {
-                              const s = prev.characters.find((c2) => c2.id === c.id);
-                              const t = prev.characters.find((c2) => c2.id === r.targetCharacterId);
-                              if (s) s.relationships = s.relationships.filter((rel) => rel.targetCharacterId !== r.targetCharacterId);
-                              if (t) t.relationships = t.relationships.filter((rel) => rel.targetCharacterId !== c.id);
-                            })} className="text-gray-600 hover:text-red-400 ml-0.5">×</button>
-                          </span>
-                        );
-                      })}
-                    </div>
-                  )}
-
-                  <div className="mt-3 flex justify-end">
-                    <button onClick={() => setIsLinkingRelation(c.id)}
-                      className="px-2 py-1 bg-neutral-950 border border-neutral-800 hover:border-red-900 rounded-lg text-[10px] text-gray-400 flex items-center gap-1">
-                      <Link className="w-3 h-3 text-red-500" /> Liên kết
-                    </button>
-                  </div>
-
-                  {isLinkingRelation === c.id && (
-                    <div className="mt-3 p-3 bg-neutral-950 border border-neutral-800 rounded-xl space-y-3">
-                      <div className="flex justify-between items-center">
-                        <span className="text-[10px] font-bold text-red-400">🔗 Liên kết quan hệ — {c.name}</span>
-                        <button onClick={() => setIsLinkingRelation(null)} className="text-[10px] text-gray-500 hover:text-gray-300">✕ Đóng</button>
-                      </div>
-
-                      <div>
-                        <label className="block text-[10px] text-gray-500 mb-1">Nhân vật liên kết tới</label>
-                        <select value={relForm.targetCharacterId}
-                          onChange={(e) => setRelForm({ ...relForm, targetCharacterId: e.target.value })}
-                          className="w-full bg-neutral-900 border border-neutral-700 rounded-lg px-2 py-1.5 text-xs text-gray-200 focus:outline-none focus:border-red-700">
-                          <option value="">-- Chọn nhân vật --</option>
-                          {characters.filter((t) => t.id !== c.id).map((t) => (
-                            <option key={t.id} value={t.id}>{t.name} · {t.role}</option>
-                          ))}
-                        </select>
-                      </div>
-
-                      <div>
-                        <label className="block text-[10px] text-gray-500 mb-1">Loại quan hệ</label>
-                        <div className="flex flex-wrap gap-1.5 mb-2">
-                          {[
-                            'Người yêu', 'Vợ', 'Chồng', 'Đạo lữ', 'Người tình bí mật',
-                            'Harem', 'Nô dịch', 'Chủ nhân', 'Lô đỉnh',
-                            'Tình địch', 'Cừu hận', 'Kẻ thù', 'Phản bội',
-                            'Tỷ muội', 'Huynh đệ', 'Sư phụ', 'Đệ tử', 'Đồng môn',
-                            'Bạn thân', 'Đồng minh', 'Cấp trên', 'Cấp dưới',
-                          ].map((rel) => (
-                            <button key={rel} type="button"
-                              // ✅ B3: Cập nhật onClick để tự gợi ý quan hệ ngược
-                              onClick={() => setRelForm({ ...relForm, relationType: rel, reverseRelationType: guessInverseRelation(rel) })}
-                              className={`px-2 py-0.5 rounded text-[10px] border transition-all ${
-                                relForm.relationType === rel
-                                  ? 'bg-red-900/50 border-red-600/60 text-red-300'
-                                  : 'bg-neutral-900 border-neutral-700 text-gray-400 hover:border-neutral-500 hover:text-gray-200'
-                              }`}>
-                              {rel}
-                            </button>
-                          ))}
-                          <button type="button"
-                            onClick={() => setRelForm({ ...relForm, relationType: '__custom__' })}
-                            className={`px-2 py-0.5 rounded text-[10px] border transition-all ${
-                              relForm.relationType === '__custom__'
-                                ? 'bg-amber-900/50 border-amber-600/60 text-amber-300'
-                                : 'bg-neutral-900 border-neutral-700 text-gray-400 hover:border-amber-700 hover:text-amber-300'
-                            }`}>
-                            ✏️ Tự nhập...
+                    <div className="flex gap-1 shrink-0 ml-3">
+                      {isLinkingRelation !== c.id ? (
+                        <>
+                          <button
+                            onClick={() => { setIsLinkingRelation(c.id); }}
+                            className="p-1.5 text-gray-500 hover:text-cyan-400 rounded-lg hover:bg-neutral-800 transition-colors"
+                            title="Tạo quan hệ"
+                          >
+                            <Link className="w-3.5 h-3.5" />
                           </button>
-                        </div>
-
-                        {relForm.relationType === '__custom__' && (
-                          <input type="text"
-                            placeholder="Nhập loại quan hệ tùy chỉnh..."
-                            value={customRelationType}
-                            onChange={(e) => setCustomRelationType(e.target.value)}
-                            className="w-full bg-neutral-900 border border-amber-800/50 rounded-lg px-2 py-1.5 text-xs text-gray-200 focus:outline-none focus:border-amber-600"
-                            spellCheck={false}
-                            autoFocus />
-                        )}
-
-                        {relForm.relationType && relForm.relationType !== '__custom__' && (
-                          <p className="text-[10px] text-red-400 mt-1">
-                            Đã chọn: <strong>{relForm.relationType}</strong>
-                          </p>
-                        )}
-
-                        {/* ✅ B4: Thêm ô Quan hệ ngược lại */}
-                        {relForm.relationType && (
-                          <div className="mt-2">
-                            <label className="block text-[10px] text-gray-500 mb-1">
-                              Quan hệ ngược lại (góc nhìn của nhân vật kia) — kiểm tra/sửa trước khi lưu
-                            </label>
+                          <button
+                            onClick={() => handleEditCharacterClick(c)}
+                            className="p-1.5 text-gray-500 hover:text-amber-400 rounded-lg hover:bg-neutral-800 transition-colors"
+                          >
+                            <Edit2 className="w-3.5 h-3.5" />
+                          </button>
+                          {confirmingDeleteCharId === c.id ? (
+                            <div className="flex items-center gap-1">
+                              <button onClick={() => handleDeleteCharacter(c.id)} className="text-[9px] px-1.5 py-0.5 bg-red-900/60 text-red-200 rounded">Xác nhận</button>
+                              <button onClick={() => setConfirmingDeleteCharId(null)} className="text-[9px] px-1.5 py-0.5 bg-neutral-800 text-gray-400 rounded">Hủy</button>
+                            </div>
+                          ) : (
+                            <button
+                              onClick={() => setConfirmingDeleteCharId(c.id)}
+                              className="p-1.5 text-gray-500 hover:text-red-400 rounded-lg hover:bg-neutral-800 transition-colors"
+                            >
+                              <Trash2 className="w-3.5 h-3.5" />
+                            </button>
+                          )}
+                        </>
+                      ) : (
+                        <div className="flex items-center gap-2 bg-neutral-950 border border-cyan-800/40 rounded-lg p-2">
+                          <select
+                            value={relForm.targetCharacterId}
+                            onChange={(e) => setRelForm({ ...relForm, targetCharacterId: e.target.value })}
+                            className="bg-neutral-950 border border-neutral-700 rounded-lg p-1 text-[10px] text-gray-200 focus:outline-none focus:border-cyan-600"
+                          >
+                            <option value="">Chọn mục tiêu</option>
+                            {characters.filter(ch => ch.id !== c.id).map(ch => (
+                              <option key={ch.id} value={ch.id}>{ch.name}</option>
+                            ))}
+                          </select>
+                          <select
+                            value={relForm.relationType}
+                            onChange={(e) => setRelForm({ ...relForm, relationType: e.target.value })}
+                            className="bg-neutral-950 border border-neutral-700 rounded-lg p-1 text-[10px] text-gray-200 focus:outline-none focus:border-cyan-600"
+                          >
+                            <option value="Người yêu">Người yêu</option>
+                            <option value="Vợ">Vợ</option>
+                            <option value="Chồng">Chồng</option>
+                            <option value="Đạo lữ">Đạo lữ</option>
+                            <option value="Người tình bí mật">Người tình bí mật</option>
+                            <option value="Harem">Harem</option>
+                            <option value="Nô dịch">Nô dịch</option>
+                            <option value="Tình địch">Tình địch</option>
+                            <option value="Cừu hận">Cừu hận</option>
+                            <option value="Kẻ thù">Kẻ thù</option>
+                            <option value="Phản bội">Phản bội</option>
+                            <option value="Tỷ muội">Tỷ muội</option>
+                            <option value="Huynh đệ">Huynh đệ</option>
+                            <option value="Sư phụ">Sư phụ</option>
+                            <option value="Đệ tử">Đệ tử</option>
+                            <option value="Đồng môn">Đồng môn</option>
+                            <option value="Bạn thân">Bạn thân</option>
+                            <option value="Đồng minh">Đồng minh</option>
+                            <option value="Cấp trên">Cấp trên</option>
+                            <option value="Cấp dưới">Cấp dưới</option>
+                            <option value="__custom__">✏️ Tự nhập</option>
+                          </select>
+                          {relForm.relationType === '__custom__' && (
                             <input
                               type="text"
-                              placeholder="VD: Em họ, Đệ tử, Chồng..."
-                              value={relForm.reverseRelationType}
-                              onChange={(e) => setRelForm({ ...relForm, reverseRelationType: e.target.value })}
-                              className="w-full bg-neutral-900 border border-amber-800/50 rounded-lg px-2 py-1.5 text-xs text-gray-200 focus:outline-none focus:border-amber-600"
-                              spellCheck={false}
+                              placeholder="Quan hệ..."
+                              value={customRelationType}
+                              onChange={(e) => setCustomRelationType(e.target.value)}
+                              className="bg-neutral-950 border border-neutral-700 rounded-lg p-1 text-[10px] text-gray-200 focus:outline-none focus:border-cyan-600 w-24"
                             />
-                          </div>
-                        )}
-                      </div>
-
-                      <div>
-                        <label className="block text-[10px] text-gray-500 mb-1">Mô tả sắc thái (tuỳ chọn)</label>
-                        <input type="text"
-                          placeholder="Ví dụ: Đã thề sống chết, đang trong giai đoạn ghen tuông..."
-                          value={relForm.description}
-                          onChange={(e) => setRelForm({ ...relForm, description: e.target.value })}
-                          className="w-full bg-neutral-900 border border-neutral-700 rounded-lg px-2 py-1.5 text-xs text-gray-200 focus:outline-none focus:border-red-700"
-                          spellCheck={false} />
-                      </div>
-
-                      <button onClick={() => handleAddRelationship(c.id)}
-                        disabled={!relForm.targetCharacterId || !relForm.relationType}
-                        className="w-full py-1.5 bg-red-900/50 border border-red-800/50 text-red-100 hover:bg-red-800/60 disabled:opacity-40 disabled:cursor-not-allowed rounded-lg text-xs font-semibold transition-colors">
-                        ✓ Xác nhận liên kết
-                      </button>
+                          )}
+                          <input
+                            type="text"
+                            placeholder="Mô tả"
+                            value={relForm.description}
+                            onChange={(e) => setRelForm({ ...relForm, description: e.target.value })}
+                            className="bg-neutral-950 border border-neutral-700 rounded-lg p-1 text-[10px] text-gray-200 focus:outline-none focus:border-cyan-600 flex-1 min-w-[60px]"
+                          />
+                          <button
+                            onClick={() => handleAddRelationship(c.id)}
+                            className="px-2 py-1 bg-cyan-700 hover:bg-cyan-600 text-white rounded-lg text-[10px] font-semibold"
+                          >
+                            <Check className="w-3 h-3" />
+                          </button>
+                          <button
+                            onClick={() => { setIsLinkingRelation(null); setRelForm({ targetCharacterId: '', relationType: 'Người tình', description: '', reverseRelationType: '', reverseDescription: '' }); }}
+                            className="p-1 text-gray-500 hover:text-gray-300"
+                          >
+                            <X className="w-3 h-3" />
+                          </button>
+                        </div>
+                      )}
                     </div>
-                  )}
+                  </div>
                 </div>
               ))}
             </div>
           )}
+
+          {characters.length === 0 && !isAddingChar && (
+            <div className="py-8 text-center text-gray-500 text-sm border border-dashed border-neutral-800 rounded-xl">
+              Chưa có nhân vật nào. Bấm "Thêm nhân vật" để bắt đầu, hoặc dùng AI Tạo Nhân Vật bên trên.
+            </div>
+          )}
         </div>
 
-        {/* Phần Thế Giới */}
-        <div className="space-y-5">
-          <div className="bg-gradient-to-br from-emerald-950/30 via-neutral-900 to-neutral-900 border border-emerald-700/30 rounded-2xl overflow-hidden">
-            <button
-              onClick={() => setWorldPanelExpanded(!worldPanelExpanded)}
-              className="w-full flex items-center justify-between px-4 py-3 hover:bg-emerald-950/20 transition-colors"
-            >
-              <div className="flex items-center gap-2.5 min-w-0">
-                <div className="p-1.5 bg-emerald-900/50 border border-emerald-600/40 rounded-lg shrink-0">
-                  <Globe className="w-3.5 h-3.5 text-emerald-400" />
-                </div>
-                <div className="text-left min-w-0">
-                  <span className="text-xs font-bold text-emerald-300">Thêm Thế Lực / Thế Giới</span>
-                  <p className="text-[9px] text-gray-500 mt-0.5 truncate">Tạo hàng loạt bằng AI, hoặc tạo chi tiết từng mục</p>
-                </div>
-              </div>
-              <div className="flex items-center gap-2 shrink-0">
-                {worldAiPreview.length > 0 && (
-                  <span className="text-[9px] px-1.5 py-0.5 bg-emerald-900/40 border border-emerald-700/40 rounded-full text-emerald-300">
-                    {worldAiPreview.length} đang chờ
-                  </span>
-                )}
-                {worldPanelExpanded ? <ChevronUp className="w-4 h-4 text-gray-500" /> : <ChevronDown className="w-4 h-4 text-gray-500" />}
-              </div>
-            </button>
-
-            {worldPanelExpanded && (
-              <div className="px-4 pb-4 border-t border-emerald-900/30 pt-3 space-y-3">
-                <div className="flex gap-1.5 p-1 bg-neutral-950 border border-neutral-800 rounded-xl">
-                  <button
-                    onClick={() => { setWorldCreateMode('batch'); setIsAddingWorldEntity(false); }}
-                    className={`flex-1 py-1.5 rounded-lg text-[11px] font-semibold transition-colors ${
-                      worldCreateMode === 'batch' ? 'bg-emerald-800/60 text-emerald-100' : 'text-gray-500 hover:text-gray-300'
-                    }`}>
-                    ⚡ Tạo hàng loạt (AI)
-                  </button>
-                  <button
-                    onClick={() => { setWorldCreateMode('detail'); setIsAddingWorldEntity(true); }}
-                    className={`flex-1 py-1.5 rounded-lg text-[11px] font-semibold transition-colors ${
-                      worldCreateMode === 'detail' ? 'bg-emerald-800/60 text-emerald-100' : 'text-gray-500 hover:text-gray-300'
-                    }`}>
-                    🔍 Tạo chi tiết 1 mục
-                  </button>
-                </div>
-
-                {worldCreateMode === 'batch' && (
-                  <div className="space-y-3">
-                    <div>
-                      <label className="block text-[10px] text-gray-400 mb-1.5">
-                        Danh mục <span className="text-gray-600">(để trống = AI tự chọn đa dạng)</span>
-                      </label>
-                      <div className="flex flex-wrap gap-1.5">
-                        {WORLD_TYPES.map((t) => (
-                          <button key={t.value} type="button" onClick={() => toggleWorldAiCategory(t.value)}
-                            className={`px-2 py-1 rounded-lg text-[10px] border transition-all ${
-                              worldAiCategories.includes(t.value)
-                                ? 'bg-emerald-900/50 border-emerald-600/60 text-emerald-300'
-                                : 'bg-neutral-950 border-neutral-800 text-gray-400 hover:border-neutral-600 hover:text-gray-200'
-                            }`}>
-                            {t.value}
-                          </button>
-                        ))}
-                        {worldAiCustomCats.map((cat) => (
-                          <button key={cat} type="button" onClick={() => toggleWorldAiCategory(cat)}
-                            className={`px-2 py-1 rounded-lg text-[10px] border transition-all ${
-                              worldAiCategories.includes(cat)
-                                ? 'bg-teal-900/50 border-teal-600/60 text-teal-300'
-                                : 'bg-neutral-950 border-teal-900/40 text-teal-500/80 hover:border-teal-700 hover:text-teal-300'
-                            }`}>
-                            ✦ {cat}
-                          </button>
-                        ))}
-                      </div>
-                      <div className="mt-2 flex gap-1.5">
-                        <input type="text" placeholder="Danh mục khác... (VD: Lời nguyền)"
-                          value={worldAiCustomCatInput}
-                          onChange={(e) => setWorldAiCustomCatInput(e.target.value)}
-                          onKeyDown={(e) => { if (e.key === 'Enter') { e.preventDefault(); handleAddWorldAiCustomCategory(); } }}
-                          className="flex-1 bg-neutral-950 border border-neutral-800 rounded-lg px-2 py-1 text-[10px] text-gray-200 focus:outline-none focus:border-teal-600"
-                          spellCheck={false} />
-                        <button type="button" onClick={handleAddWorldAiCustomCategory}
-                          className="px-2.5 py-1 bg-teal-950/40 border border-teal-800/40 hover:border-teal-600/60 rounded-lg text-[10px] text-teal-300 flex items-center gap-1 transition-colors shrink-0">
-                          <Plus className="w-3 h-3" /> Thêm
-                        </button>
-                      </div>
-                    </div>
-
-                    <div>
-                      <label className="block text-[10px] text-gray-400 mb-1">Yêu cầu / mô tả</label>
-                      <textarea rows={3}
-                        placeholder="VD: Tạo các loại đan dược đặc trưng của tông môn chính..."
-                        value={worldAiPrompt}
-                        onChange={(e) => setWorldAiPrompt(e.target.value)}
-                        className="w-full bg-neutral-950 border border-emerald-900/40 focus:border-emerald-600/60 rounded-xl p-2.5 text-[11px] text-gray-200 focus:outline-none resize-none leading-relaxed"
-                        spellCheck={false} />
-                    </div>
-
-                    <div>
-                      <label className="block text-[10px] text-gray-400 mb-1">Số lượng <span className="text-gray-600">(1-30)</span></label>
-                      <div className="flex items-center gap-2">
-                        <input type="number" min={1} max={30} value={worldAiQuantity}
-                          onChange={(e) => setWorldAiQuantity(Number(e.target.value))}
-                          className="w-20 bg-neutral-950 border border-neutral-800 rounded-lg p-1.5 text-xs text-gray-200 focus:outline-none focus:border-emerald-600" />
-                        <div className="flex gap-1">
-                          {[1, 5, 10, 20].map((n) => (
-                            <button key={n} type="button" onClick={() => setWorldAiQuantity(n)}
-                              className={`px-2 py-1 rounded-lg text-[10px] border transition-all ${
-                                worldAiQuantity === n
-                                  ? 'bg-emerald-900/50 border-emerald-600/60 text-emerald-300'
-                                  : 'bg-neutral-950 border-neutral-800 text-gray-500 hover:border-neutral-600'
-                              }`}>
-                              {n}
-                            </button>
-                          ))}
-                        </div>
-                      </div>
-                    </div>
-
-                    <button onClick={handleWorldAIGenerate} disabled={worldAiLoading || !worldAiPrompt.trim()}
-                      className="w-full py-2 bg-gradient-to-r from-emerald-800/60 to-teal-800/60 hover:from-emerald-700/70 hover:to-teal-700/70 border border-emerald-700/40 disabled:opacity-40 disabled:cursor-not-allowed rounded-xl text-xs font-semibold text-emerald-100 flex items-center justify-center gap-2 transition-all">
-                      {worldAiLoading
-                        ? <><Loader2 className="w-3.5 h-3.5 animate-spin" /> Đang tạo {worldAiQuantity} mục...</>
-                        : <><Sparkles className="w-3.5 h-3.5" /> Tạo {worldAiQuantity > 1 ? `${worldAiQuantity} mục` : '1 mục'} bằng AI</>}
-                    </button>
-
-                    {worldAiError && (
-                      <div className="px-3 py-2 bg-red-950/40 border border-red-800/50 rounded-xl text-[10px] text-red-300 flex items-center gap-1.5">
-                        <span className="text-red-400">⚠</span> {worldAiError}
-                      </div>
-                    )}
-
-                    {worldAiPreview.length > 0 && (
-                      <div className="space-y-2">
-                        <div className="flex items-center justify-between">
-                          <p className="text-[10px] font-bold text-emerald-300">
-                            {worldAiSelected.size}/{worldAiPreview.length} đã chọn
-                          </p>
-                          <button
-                            onClick={() => setWorldAiSelected(
-                              worldAiSelected.size === worldAiPreview.length ? new Set() : new Set(worldAiPreview.map((_, i) => i))
-                            )}
-                            className="text-[9px] text-emerald-400 hover:underline">
-                            {worldAiSelected.size === worldAiPreview.length ? 'Bỏ chọn tất cả' : 'Chọn tất cả'}
-                          </button>
-                        </div>
-                        <div className="space-y-1.5 max-h-64 overflow-y-auto">
-                          {worldAiPreview.map((w, i) => (
-                            <label key={i} className="flex items-start gap-2 p-2 bg-neutral-950/60 border border-neutral-800 rounded-lg cursor-pointer hover:border-emerald-900/50">
-                              <input type="checkbox" checked={worldAiSelected.has(i)}
-                                onChange={() => setWorldAiSelected((prev) => {
-                                  const n = new Set(prev);
-                                  n.has(i) ? n.delete(i) : n.add(i);
-                                  return n;
-                                })}
-                                className="mt-0.5 accent-emerald-600 shrink-0" />
-                              <div className="min-w-0 flex-1">
-                                <p className="text-[11px] font-semibold text-gray-200">
-                                  {w.name} <span className="text-emerald-500/80 font-normal text-[10px]">· {w.type}</span>
-                                </p>
-                                <p className="text-[10px] text-gray-500 leading-relaxed">{w.description}</p>
-                              </div>
-                            </label>
-                          ))}
-                        </div>
-                        <button onClick={handleImportWorldAiSelected}
-                          className="w-full py-2 bg-green-800/60 hover:bg-green-700/70 border border-green-700/50 rounded-xl text-xs font-bold text-green-100 flex items-center justify-center gap-2 transition-colors">
-                          <CheckCircle2 className="w-3.5 h-3.5" />
-                          Nhập {worldAiSelected.size} mục đã chọn vào dự án
-                        </button>
-                      </div>
-                    )}
-                  </div>
-                )}
-
-                {worldCreateMode === 'detail' && isAddingWorldEntity && (
-                  <div className="bg-neutral-900 border border-neutral-800 rounded-xl p-4 space-y-3">
-                    <span className="text-xs font-bold text-amber-400">Tạo Thế Lực Chi Tiết</span>
-                    
-                    <div>
-                      <label className="block text-[10px] text-gray-500 mb-1">
-                        {worldForm.type === 'Chủng tộc' ? 'Tên loài *' : 'Tên tổ chức *'}
-                      </label>
-                      <input type="text" 
-                        placeholder={worldForm.type === 'Chủng tộc' ? 'Tên loài (VD: Yêu Hồ Cửu Vĩ)...' : 'Tên tổ chức...'} 
-                        value={worldForm.name}
-                        onChange={(e) => setWorldForm({ ...worldForm, name: e.target.value })}
-                        className="w-full bg-neutral-950 border border-neutral-800 rounded p-2 text-xs text-gray-200 focus:outline-none focus:border-emerald-600"
-                        spellCheck={false} />
-                    </div>
-                    
-                    <div>
-                      <label className="block text-[10px] text-gray-500 mb-1">Loại</label>
-                      <div className="flex flex-wrap gap-1.5 mb-2">
-                        {WORLD_TYPES.map(t => (
-                          <button key={t.value} type="button"
-                            onClick={() => { setWorldForm({ ...worldForm, type: t.value }); }}
-                            className={`px-2 py-1 rounded-lg text-[10px] border transition-all ${
-                              worldForm.type === t.value
-                                ? 'bg-amber-900/50 border-amber-600/60 text-amber-300'
-                                : 'bg-neutral-950 border-neutral-800 text-gray-400 hover:border-neutral-600 hover:text-gray-200'
-                            }`}>
-                            {t.label}
-                          </button>
-                        ))}
-                      </div>
-                      <input type="text" placeholder="...hoặc tự nhập bất kỳ (VD: Yêu tinh tộc, Ma giáo, Long tộc)"
-                        value={worldForm.type}
-                        onChange={(e) => setWorldForm({ ...worldForm, type: e.target.value })}
-                        className="w-full bg-neutral-950 border border-neutral-800 rounded p-2 text-xs text-gray-200 focus:outline-none"
-                        spellCheck={false} />
-                    </div>
-                    
-                    <div>
-                      <div className="flex items-center justify-between mb-1">
-                        <label className="block text-[10px] text-gray-500">Mô tả</label>
-                        <button type="button" onClick={handleAIDescribeDetail} disabled={detailAiLoading || !worldForm.name.trim()}
-                          className="text-[9px] text-emerald-400 hover:underline flex items-center gap-1 disabled:opacity-50">
-                          {detailAiLoading ? <Loader2 className="w-2.5 h-2.5 animate-spin" /> : <Sparkles className="w-2.5 h-2.5" />}
-                          AI viết mô tả
-                        </button>
-                      </div>
-                      {detailAiError && <p className="text-[9px] text-red-400 mb-1">⚠ {detailAiError}</p>}
-                      <textarea rows={3} placeholder="Mô tả sức mạnh, quy tắc..." value={worldForm.description}
-                        onChange={(e) => setWorldForm({ ...worldForm, description: e.target.value })}
-                        className="w-full bg-neutral-950 border border-neutral-800 rounded p-2 text-xs text-gray-200 focus:outline-none"
-                        spellCheck={false} />
-                    </div>
-
-                    {/* ✅ B11 + D3: Ô Dữ liệu hiện hữu cho thế lực + nút xóa lịch sử */}
-                    <div className="border-t border-cyan-900/30 pt-3">
-                      <div className="flex items-center justify-between mb-1">
-                        <label className="text-[10px] text-cyan-300 flex items-center gap-1.5">
-                          🔄 Dữ liệu hiện hữu <span className="text-[9px] text-gray-500 font-normal">(tự động cập nhật khi Tóm tắt chương)</span>
-                        </label>
-                        {worldForm.currentData?.trim() && (
-                          confirmingClearWorldData ? (
-                            <div className="flex items-center gap-1 shrink-0">
-                              <button type="button"
-                                onClick={() => { setWorldForm({ ...worldForm, currentData: '' }); setConfirmingClearWorldData(false); }}
-                                className="text-[9px] px-1.5 py-0.5 bg-red-900/60 text-red-200 rounded">Xác nhận xóa</button>
-                              <button type="button"
-                                onClick={() => setConfirmingClearWorldData(false)}
-                                className="text-[9px] px-1.5 py-0.5 bg-neutral-800 text-gray-400 rounded">Hủy</button>
-                            </div>
-                          ) : (
-                            <button type="button"
-                              onClick={() => setConfirmingClearWorldData(true)}
-                              className="text-[9px] text-gray-500 hover:text-red-400 flex items-center gap-0.5 shrink-0">
-                              <Trash2 className="w-2.5 h-2.5" /> Xóa lịch sử
-                            </button>
-                          )
-                        )}
-                      </div>
-                      <textarea rows={4}
-                        placeholder="Sẽ tự động điền khi dùng nút Tóm tắt chương ở trang Sáng Tác. Có thể tự gõ tay."
-                        value={worldForm.currentData || ''}
-                        onChange={(e) => setWorldForm({ ...worldForm, currentData: e.target.value })}
-                        className="w-full bg-neutral-950 border border-cyan-900/40 rounded p-2 text-xs text-gray-200 focus:outline-none focus:border-cyan-600 resize-y whitespace-pre-wrap"
-                        spellCheck={false} />
-                    </div>
-
-                    {(worldForm.type === 'Chủng tộc' || 
-                      worldForm.type.toLowerCase().includes('yêu') || 
-                      worldForm.type.toLowerCase().includes('ma') || 
-                      worldForm.type.toLowerCase().includes('quái') || 
-                      worldForm.type.toLowerCase().includes('thú')) && (
-                      <SpeciesTraitsEditor
-                        traits={worldForm.speciesTraits}
-                        onChange={(speciesTraits) => setWorldForm({ ...worldForm, speciesTraits })}
-                        entityName={worldForm.name}
-                        novelContext={{ title: state.config.title, genres: state.config.genres, context: state.config.context }}
-                        apiKeys={state.apiKeys}
-                      />
-                    )}
-
-                    <div>
-                      <label className="block text-[10px] text-gray-500 mb-1 flex items-center gap-1">
-                        <Clock className="w-3 h-3 text-cyan-400" /> Mốc xuất hiện lần đầu (tuỳ chọn)
-                      </label>
-                      <input type="number" placeholder="VD: 165" value={worldForm.firstAppearanceOrder}
-                        onChange={(e) => setWorldForm({ ...worldForm, firstAppearanceOrder: e.target.value })}
-                        className="w-full bg-neutral-950 border border-neutral-800 rounded p-2 text-xs text-gray-200 focus:outline-none focus:border-cyan-600" />
-                    </div>
-                    
-                    <div className="flex justify-end gap-2">
-                      <button onClick={() => { setIsAddingWorldEntity(false); }} 
-                        className="px-2.5 py-1 bg-neutral-800 rounded text-xs text-gray-400">Đóng</button>
-                      <button onClick={handleSaveWorldEntity} 
-                        className="px-3 py-1 bg-amber-600 hover:bg-amber-500 text-white rounded text-xs font-semibold">Lưu</button>
-                    </div>
-                  </div>
-                )}
-              </div>
-            )}
-          </div>
-
+        {/* Phần Thế Giới - chỉ còn bảng tóm tắt gọn */}
+        <div className="lg:col-span-1 space-y-5">
           <div className="flex items-center justify-between">
             <h3 className="text-base font-bold text-gray-200 flex items-center gap-2">
-              <Globe className="w-4 h-4 text-amber-500" /> Thế lực ({worldEntities.length})
+              <Globe className="w-4 h-4 text-emerald-400" /> Thế Giới ({worldEntities.length})
             </h3>
+            <button onClick={openWorldModalForCreate}
+              className="px-3 py-1.5 bg-emerald-900/60 hover:bg-emerald-800 text-emerald-100 text-xs rounded-lg border border-emerald-700/50 flex items-center gap-1 transition-colors">
+              <Plus className="w-3.5 h-3.5" /> Thêm
+            </button>
           </div>
 
-          <div className="space-y-2">
-            {worldEntities.length === 0 ? (
-              <div className="py-8 border border-dashed border-neutral-800 rounded-xl text-center text-gray-500 text-xs">
-                Chưa có thế lực nào.
-              </div>
-            ) : worldEntities.map((e) => (
-              <div key={e.id} className="bg-neutral-900 border border-neutral-800 rounded-xl p-3 hover:border-amber-900/40">
-                <div className="flex justify-between items-start">
-                  <div>
-                    <span className="text-xs font-bold text-gray-200">{e.name}</span>
-                    <span className="ml-2 px-1 py-0.5 rounded text-[8px] bg-neutral-800 text-amber-400 uppercase font-mono">{e.type}</span>
-                    {e.firstAppearanceOrder !== undefined && (
-                      <span className="ml-1.5 text-[9px] text-gray-500">· #{e.firstAppearanceOrder}</span>
-                    )}
+          {worldEntities.length > 0 ? (
+            <div className="space-y-2">
+              {worldEntities.map(w => (
+                <div key={w.id} onClick={() => openWorldEntityForEdit(w)}
+                  className="bg-neutral-900 border border-neutral-800 rounded-xl p-3 hover:border-emerald-900/40 cursor-pointer transition-colors">
+                  <div className="flex items-center gap-1.5 flex-wrap">
+                    <span className="text-sm font-bold text-gray-200">{w.name}</span>
+                    <span className="text-[9px] px-1.5 py-0.5 bg-emerald-950/50 border border-emerald-800/40 rounded text-emerald-400">{w.type}</span>
                   </div>
-                  {confirmingDeleteWorldId === e.id ? (
-                    <div className="flex items-center gap-1">
-                      <button onClick={() => handleDeleteWorldEntity(e.id)} className="text-[8px] px-1.5 py-0.5 bg-red-900/60 text-red-200 rounded">Xác nhận</button>
-                      <button onClick={() => setConfirmingDeleteWorldId(null)} className="text-[8px] px-1.5 py-0.5 bg-neutral-800 text-gray-400 rounded">Hủy</button>
-                    </div>
-                  ) : (
-                    <button onClick={() => setConfirmingDeleteWorldId(e.id)} className="text-neutral-500 hover:text-red-400 p-0.5">
-                      <Trash2 className="w-3 h-3" />
-                    </button>
-                  )}
+                  <p className="text-[10px] text-gray-500 mt-0.5 line-clamp-2">{w.description || 'Chưa có mô tả'}</p>
                 </div>
-                <p className="text-[11px] text-gray-400 mt-1.5 leading-relaxed">{ensureString(e.description)}</p>
-                {/* ✅ B12: Hiển thị currentData trên card thế lực */}
-                {e.currentData && (
-                  <p className="text-[10px] text-cyan-400/80 mt-1 leading-relaxed">🔄 {ensureString(e.currentData)}</p>
-                )}
-                {e.speciesTraits && (
-                  <div className="mt-1.5 flex flex-wrap gap-1">
-                    {e.speciesTraits.threatLevel && (
-                      <span className="text-[8px] px-1.5 py-0.5 bg-red-950/30 text-red-400 border border-red-900/30 rounded">
-                        {e.speciesTraits.threatLevel}
-                      </span>
-                    )}
-                    {e.speciesTraits.abilities?.length > 0 && (
-                      <span className="text-[8px] px-1.5 py-0.5 bg-emerald-950/30 text-emerald-400 border border-emerald-900/30 rounded">
-                        {e.speciesTraits.abilities.length} chiêu
-                      </span>
-                    )}
-                    {e.speciesTraits.weakness && (
-                      <span className="text-[8px] px-1.5 py-0.5 bg-amber-950/30 text-amber-400 border border-amber-900/30 rounded">
-                        yếu: {e.speciesTraits.weakness.slice(0, 20)}
-                      </span>
-                    )}
-                  </div>
-                )}
-              </div>
-            ))}
-          </div>
+              ))}
+            </div>
+          ) : (
+            <div onClick={openWorldModalForCreate}
+              className="py-6 text-center text-gray-500 text-xs border border-dashed border-neutral-800 rounded-xl cursor-pointer hover:border-emerald-800/40 transition-colors">
+              Chưa có thực thể thế giới. Bấm "Thêm" để tạo tông môn, địa danh, chủng tộc...
+            </div>
+          )}
         </div>
       </div>
 
+      {/* Nav buttons */}
       <div className="flex justify-end gap-3 pt-8 border-t border-neutral-800 mt-8">
         <button onClick={() => onNavigate('idea')} className="px-5 py-2.5 bg-neutral-800 border border-neutral-700 hover:bg-neutral-700 text-neutral-300 rounded-lg text-sm">
           Quay Lại
@@ -3584,6 +3331,345 @@ export default function Page3Characters({ state, updateState, onNavigate }: Page
           Quy Tắc Viết →
         </button>
       </div>
+
+      {/* ─── WORLD MODAL ────────────────────────────────────────────────── */}
+      {worldModalOpen && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center p-4">
+          <div className="absolute inset-0 bg-black/80 backdrop-blur-sm" onClick={() => setWorldModalOpen(false)} />
+          <div className="relative w-full max-w-5xl h-[88vh] bg-neutral-900 border border-emerald-700/40 rounded-2xl shadow-2xl overflow-hidden flex flex-col">
+
+            <div className="flex items-center justify-between px-6 py-4 border-b border-neutral-800 shrink-0">
+              <div className="flex items-center gap-2">
+                <Globe className="w-5 h-5 text-emerald-400" />
+                <span className="text-base font-bold text-emerald-300">Thế Giới ({worldEntities.length})</span>
+              </div>
+              <button onClick={() => setWorldModalOpen(false)} className="p-1.5 text-gray-500 hover:text-gray-200 hover:bg-neutral-800 rounded-lg">
+                <X className="w-5 h-5" />
+              </button>
+            </div>
+
+            <div className="flex gap-2 px-6 pt-4 shrink-0">
+              <button onClick={() => setWorldModalMode('list')}
+                className={`px-4 py-2 text-sm rounded-lg transition-colors ${worldModalMode === 'list' ? 'bg-emerald-900/50 border border-emerald-700/50 text-emerald-300' : 'bg-neutral-800/50 border border-neutral-700 text-gray-400 hover:text-gray-200'}`}>
+                📋 Danh sách ({worldEntities.length})
+              </button>
+              <button onClick={() => { resetWorldForm(); setEditingWorldId(null); setWorldModalMode('batch'); }}
+                className={`px-4 py-2 text-sm rounded-lg transition-colors ${worldModalMode === 'batch' ? 'bg-emerald-900/50 border border-emerald-700/50 text-emerald-300' : 'bg-neutral-800/50 border border-neutral-700 text-gray-400 hover:text-gray-200'}`}>
+                ✨ Tạo hàng loạt (AI)
+              </button>
+              <button onClick={() => { if (!editingWorldId) resetWorldForm(); setWorldModalMode('detail'); }}
+                className={`px-4 py-2 text-sm rounded-lg transition-colors ${worldModalMode === 'detail' ? 'bg-emerald-900/50 border border-emerald-700/50 text-emerald-300' : 'bg-neutral-800/50 border border-neutral-700 text-gray-400 hover:text-gray-200'}`}>
+                📝 {editingWorldId ? `Sửa: ${worldForm.name || '...'}` : 'Tạo chi tiết 1 mục'}
+              </button>
+            </div>
+
+            <div className="flex-1 overflow-y-auto px-6 py-5">
+
+              {/* ── TAB: DANH SÁCH ── */}
+              {worldModalMode === 'list' && (
+                worldEntities.length === 0 ? (
+                  <div className="py-16 text-center text-gray-500 text-sm border border-dashed border-neutral-800 rounded-xl">
+                    Chưa có thực thể nào. Chuyển sang tab "Tạo hàng loạt (AI)" hoặc "Tạo chi tiết" để bắt đầu.
+                  </div>
+                ) : (
+                  <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-3">
+                    {worldEntities.map(w => (
+                      <div key={w.id} onClick={() => openWorldEntityForEdit(w)}
+                        className="bg-neutral-950 border border-neutral-800 rounded-xl p-3.5 hover:border-emerald-900/50 cursor-pointer transition-colors">
+                        <div className="flex items-center gap-1.5 flex-wrap">
+                          <span className="text-sm font-bold text-gray-200">{w.name}</span>
+                          <span className="text-[9px] px-1.5 py-0.5 bg-emerald-950/50 border border-emerald-800/40 rounded text-emerald-400">{w.type}</span>
+                        </div>
+                        <p className="text-xs text-gray-500 mt-1.5 line-clamp-3 leading-relaxed">{w.description || 'Chưa có mô tả'}</p>
+                        {w.speciesTraits && <span className="text-[10px] text-emerald-400 mt-1.5 inline-block">🐉 Có đặc điểm chủng loài</span>}
+                        <div className="flex justify-end mt-2" onClick={e => e.stopPropagation()}>
+                          {confirmingDeleteWorldId === w.id ? (
+                            <div className="flex items-center gap-1">
+                              <button onClick={() => handleDeleteWorldEntity(w.id)} className="text-[9px] px-1.5 py-0.5 bg-red-900/60 text-red-200 rounded">Xác nhận xoá</button>
+                              <button onClick={() => setConfirmingDeleteWorldId(null)} className="text-[9px] px-1.5 py-0.5 bg-neutral-800 text-gray-400 rounded">Hủy</button>
+                            </div>
+                          ) : (
+                            <button onClick={() => setConfirmingDeleteWorldId(w.id)} className="p-1 text-gray-500 hover:text-red-400">
+                              <Trash2 className="w-3.5 h-3.5" />
+                            </button>
+                          )}
+                        </div>
+                      </div>
+                    ))}
+                  </div>
+                )
+              )}
+
+              {/* ── TAB: TẠO HÀNG LOẠT (AI) ── */}
+              {worldModalMode === 'batch' && (
+                <div className="max-w-2xl mx-auto space-y-3">
+                  <p className="text-[10px] text-gray-500">AI sẽ sinh nhiều thực thể thế giới cùng lúc</p>
+                  <div>
+                    <label className="block text-[10px] text-gray-400 mb-1">Chọn loại muốn tạo</label>
+                    <div className="flex flex-wrap gap-1">
+                      {WORLD_TYPES.map(t => (
+                        <button
+                          key={t.value}
+                          onClick={() => toggleWorldAiCategory(t.value)}
+                          className={`px-2 py-0.5 rounded text-[9px] border transition-colors ${
+                            worldAiCategories.includes(t.value)
+                              ? 'bg-emerald-900/50 border-emerald-700/50 text-emerald-300'
+                              : 'bg-neutral-950 border-neutral-700 text-gray-500 hover:border-neutral-500'
+                          }`}
+                        >
+                          {t.label}
+                        </button>
+                      ))}
+                    </div>
+                    <div className="flex gap-1 mt-1">
+                      <input
+                        type="text"
+                        placeholder="Hoặc tự nhập loại..."
+                        value={worldAiCustomCatInput}
+                        onChange={(e) => setWorldAiCustomCatInput(e.target.value)}
+                        className="flex-1 bg-neutral-950 border border-neutral-700 rounded-lg p-1 text-[10px] text-gray-200 focus:outline-none focus:border-emerald-600"
+                      />
+                      <button
+                        onClick={handleAddWorldAiCustomCategory}
+                        className="px-2 py-1 bg-neutral-800 border border-neutral-700 rounded-lg text-[9px] text-gray-400 hover:text-gray-200"
+                      >
+                        Thêm
+                      </button>
+                    </div>
+                  </div>
+
+                  <div>
+                    <label className="block text-[10px] text-gray-400 mb-1">Mô tả yêu cầu</label>
+                    <textarea
+                      rows={3}
+                      placeholder="VD: Tạo các thế lực và địa danh cho tu tiên thế giới: 2 tông môn lớn, 1 mật cảnh, 1 loại linh thú..."
+                      value={worldAiPrompt}
+                      onChange={(e) => setWorldAiPrompt(e.target.value)}
+                      className="w-full bg-neutral-950 border border-neutral-800 rounded-lg p-2 text-[11px] text-gray-200 focus:outline-none focus:border-emerald-600 resize-y"
+                      spellCheck={false}
+                    />
+                  </div>
+
+                  <div className="flex items-center gap-2">
+                    <label className="text-[10px] text-gray-500">Số lượng:</label>
+                    <input
+                      type="number"
+                      min={1}
+                      max={30}
+                      value={worldAiQuantity}
+                      onChange={(e) => setWorldAiQuantity(Number(e.target.value))}
+                      className="w-16 bg-neutral-950 border border-neutral-800 rounded-lg p-1 text-xs text-gray-200 focus:outline-none"
+                    />
+                    <span className="text-[9px] text-gray-600">(1-30 mục)</span>
+                  </div>
+
+                  <button
+                    onClick={handleWorldAIGenerate}
+                    disabled={worldAiLoading || !worldAiPrompt.trim()}
+                    className="w-full py-2 bg-emerald-800/60 hover:bg-emerald-700/70 border border-emerald-700/40 disabled:opacity-40 rounded-lg text-xs font-semibold text-emerald-100 flex items-center justify-center gap-2 transition-colors"
+                  >
+                    {worldAiLoading
+                      ? <><Loader2 className="w-3.5 h-3.5 animate-spin" /> Đang sinh...</>
+                      : <><Sparkles className="w-3.5 h-3.5" /> Sinh {worldAiQuantity} thực thể</>}
+                  </button>
+
+                  {worldAiError && (
+                    <div className="px-3 py-2 bg-red-950/30 border border-red-800/40 rounded-lg text-[10px] text-red-300">
+                      ⚠ {worldAiError}
+                    </div>
+                  )}
+
+                  {worldAiPreview.length > 0 && (
+                    <div className="space-y-2">
+                      <div className="flex items-center justify-between">
+                        <p className="text-[10px] font-bold text-emerald-300">{worldAiSelected.size}/{worldAiPreview.length} đã chọn</p>
+                        <button
+                          onClick={() => setWorldAiSelected(
+                            worldAiSelected.size === worldAiPreview.length ? new Set() : new Set(worldAiPreview.map((_, i) => i))
+                          )}
+                          className="text-[9px] text-emerald-400 hover:underline"
+                        >
+                          {worldAiSelected.size === worldAiPreview.length ? 'Bỏ chọn tất cả' : 'Chọn tất cả'}
+                        </button>
+                      </div>
+                      <div className="space-y-2 max-h-96 overflow-y-auto">
+                        {worldAiPreview.map((w, i) => (
+                          <div key={i} className="flex items-start gap-2 p-2 bg-neutral-950/60 border border-neutral-800 rounded-lg hover:border-emerald-900/50">
+                            <input
+                              type="checkbox"
+                              checked={worldAiSelected.has(i)}
+                              onChange={() => setWorldAiSelected(prev => {
+                                const n = new Set(prev);
+                                n.has(i) ? n.delete(i) : n.add(i);
+                                return n;
+                              })}
+                              className="mt-2 accent-emerald-600 shrink-0"
+                            />
+                            <div className="min-w-0 flex-1 space-y-1">
+                              <div className="flex gap-1.5">
+                                <input
+                                  value={w.name}
+                                  onChange={ev => updateWorldAiPreviewItem(i, 'name', ev.target.value)}
+                                  className="flex-1 bg-neutral-900 border border-neutral-700 rounded p-1 text-[11px] font-semibold text-gray-200 focus:outline-none focus:border-emerald-600"
+                                />
+                                <input
+                                  value={w.type}
+                                  onChange={ev => updateWorldAiPreviewItem(i, 'type', ev.target.value)}
+                                  className="w-28 bg-neutral-900 border border-neutral-700 rounded p-1 text-[10px] text-emerald-400 focus:outline-none focus:border-emerald-600"
+                                />
+                              </div>
+                              <textarea
+                                rows={2}
+                                value={w.description}
+                                onChange={ev => updateWorldAiPreviewItem(i, 'description', ev.target.value)}
+                                className="w-full bg-neutral-900 border border-neutral-700 rounded p-1.5 text-[10px] text-gray-300 focus:outline-none focus:border-emerald-600 resize-y leading-relaxed"
+                              />
+                            </div>
+                            <button
+                              type="button"
+                              onClick={() => removeWorldAiPreviewItem(i)}
+                              className="p-1 text-gray-500 hover:text-red-400 shrink-0 mt-1"
+                              title="Xoá khỏi danh sách chờ"
+                            >
+                              <Trash2 className="w-3.5 h-3.5" />
+                            </button>
+                          </div>
+                        ))}
+                      </div>
+                      <button
+                        onClick={handleImportWorldAiSelected}
+                        className="w-full py-2 bg-green-800/60 hover:bg-green-700/70 border border-green-700/50 rounded-lg text-xs font-bold text-green-100 flex items-center justify-center gap-2 transition-colors"
+                      >
+                        <CheckCircle2 className="w-3.5 h-3.5" />
+                        Thêm {worldAiSelected.size} mục vào thế giới
+                      </button>
+                    </div>
+                  )}
+                </div>
+              )}
+
+              {/* ── TAB: TẠO CHI TIẾT / SỬA ── */}
+              {worldModalMode === 'detail' && (
+                <div className="max-w-2xl mx-auto space-y-3">
+                  <p className="text-[10px] text-gray-500">Nhập tay hoặc dùng AI viết mô tả cho 1 mục</p>
+
+                  <div>
+                    <label className="block text-[10px] text-gray-400 mb-1">Tên *</label>
+                    <input
+                      type="text"
+                      placeholder="VD: Thanh Vân Môn"
+                      value={worldForm.name}
+                      onChange={(e) => setWorldForm({ ...worldForm, name: e.target.value })}
+                      className="w-full bg-neutral-950 border border-neutral-800 rounded-lg p-2 text-xs text-gray-200 focus:outline-none focus:border-emerald-500"
+                    />
+                  </div>
+
+                  <div>
+                    <label className="block text-[10px] text-gray-400 mb-1">Loại</label>
+                    <select
+                      value={worldForm.type}
+                      onChange={(e) => setWorldForm({ ...worldForm, type: e.target.value })}
+                      className="w-full bg-neutral-950 border border-neutral-800 rounded-lg p-2 text-xs text-gray-200 focus:outline-none focus:border-emerald-500"
+                    >
+                      {WORLD_TYPES.map(t => (
+                        <option key={t.value} value={t.value}>{t.label}</option>
+                      ))}
+                    </select>
+                  </div>
+
+                  <div>
+                    <label className="block text-[10px] text-gray-400 mb-1 flex items-center gap-2">
+                      Mô tả
+                      <button
+                        type="button"
+                        onClick={handleAIDescribeDetail}
+                        disabled={detailAiLoading || !worldForm.name.trim()}
+                        className="text-[9px] px-2 py-0.5 bg-emerald-950/40 hover:bg-emerald-900/50 border border-emerald-800/40 rounded text-emerald-300 transition-colors disabled:opacity-40 flex items-center gap-1"
+                      >
+                        {detailAiLoading ? <Loader2 className="w-2.5 h-2.5 animate-spin" /> : <Sparkles className="w-2.5 h-2.5" />}
+                        AI viết mô tả
+                      </button>
+                    </label>
+                    <textarea
+                      rows={4}
+                      placeholder="Mô tả chi tiết..."
+                      value={worldForm.description}
+                      onChange={(e) => setWorldForm({ ...worldForm, description: e.target.value })}
+                      className="w-full bg-neutral-950 border border-neutral-800 rounded-lg p-2 text-xs text-gray-200 focus:outline-none focus:border-emerald-500 resize-y"
+                    />
+                    {detailAiError && (
+                      <div className="mt-1 text-[9px] text-red-400">{detailAiError}</div>
+                    )}
+                  </div>
+
+                  <div>
+                    <label className="block text-[10px] text-gray-400 mb-1 flex items-center gap-2">
+                      🔄 Dữ liệu hiện hữu
+                      <button
+                        type="button"
+                        onClick={() => {
+                          if (confirmingClearWorldData) {
+                            setWorldForm({ ...worldForm, currentData: '' });
+                            setConfirmingClearWorldData(false);
+                          } else {
+                            setConfirmingClearWorldData(true);
+                          }
+                        }}
+                        className="text-[9px] px-2 py-0.5 bg-red-950/40 hover:bg-red-900/50 border border-red-800/40 rounded text-red-300 transition-colors"
+                      >
+                        {confirmingClearWorldData ? 'Xác nhận xoá' : 'Xoá tất cả'}
+                      </button>
+                    </label>
+                    <textarea
+                      rows={4}
+                      placeholder="Dán toàn bộ dữ liệu hiện có về thực thể này..."
+                      value={worldForm.currentData}
+                      onChange={(e) => setWorldForm({ ...worldForm, currentData: e.target.value })}
+                      className="w-full bg-neutral-950 border border-neutral-800 rounded-lg p-2 text-xs text-gray-200 focus:outline-none focus:border-emerald-500 resize-y font-mono"
+                    />
+                  </div>
+
+                  <div>
+                    <label className="block text-[10px] text-gray-400 mb-1">Mốc xuất hiện lần đầu (order)</label>
+                    <input
+                      type="number"
+                      placeholder="VD: 20"
+                      value={worldForm.firstAppearanceOrder}
+                      onChange={(e) => setWorldForm({ ...worldForm, firstAppearanceOrder: e.target.value })}
+                      className="w-40 bg-neutral-950 border border-neutral-800 rounded-lg p-2 text-xs text-gray-200 focus:outline-none focus:border-emerald-500"
+                    />
+                  </div>
+
+                  <SpeciesTraitsEditor
+                    traits={worldForm.speciesTraits}
+                    onChange={(traits) => setWorldForm({ ...worldForm, speciesTraits: traits })}
+                    entityName={worldForm.name}
+                    novelContext={{ 
+                      title: state.config.title || '', 
+                      genres: buildGenreContextLabel(state.config), 
+                      context: state.config.context || '' 
+                    }}
+                    apiKeys={state.apiKeys}
+                  />
+
+                  <div className="flex justify-end gap-2 pt-3 border-t border-neutral-800">
+                    {editingWorldId && (
+                      <button onClick={() => { resetWorldForm(); setEditingWorldId(null); setWorldModalMode('list'); }}
+                        className="px-3 py-1.5 text-xs text-gray-400 hover:text-gray-200 hover:bg-neutral-800 rounded-lg">
+                        Hủy sửa
+                      </button>
+                    )}
+                    <button onClick={handleSaveWorldEntity}
+                      className="px-5 py-1.5 bg-emerald-700 hover:bg-emerald-600 text-white rounded-lg text-xs font-semibold">
+                      {editingWorldId ? 'Cập nhật thực thể' : 'Lưu thực thể'}
+                    </button>
+                  </div>
+                </div>
+              )}
+            </div>
+          </div>
+        </div>
+      )}
     </div>
   );
 }

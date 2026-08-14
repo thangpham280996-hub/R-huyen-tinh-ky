@@ -6,6 +6,7 @@ import {
   CheckCircle2, AlertCircle
 } from 'lucide-react';
 import { NovelState, HardRules, LoreEntry, SexualLexicon } from '../types';
+import { ADDRESS_TERM_PRESETS, buildAddressTermPrompt, AddressTermSet } from './addressTerms';
 
 interface Page4RulesProps {
   state: NovelState;
@@ -28,8 +29,6 @@ export const DEFAULT_HARD_RULES: HardRules = {
   noRepeatContent:        true,
   noMetaComments:         true,
   noOOCPersonality:       true,
-  noModernSlangInAncient: true,
-  noAncientToneInModern:  false,
   noAbruptResolution:     true,
   noSummaryMode:          true,
   noExcessiveEllipsis:    true,
@@ -39,14 +38,14 @@ export const DEFAULT_HARD_RULES: HardRules = {
   noAddScene:             true,
   noSkipNoAvoid:          true,
   requireDetailedSexScene: true,
-  // 👈 3 RULE MỚI
-  noThematicClosingLine:  true,  // Cấm câu tổng kết/tuyên ngôn giữa chừng
-  noSparseDialogue:       true,  // Bắt buộc đối thoại tối thiểu 30%
-  requireBodyDetail:      true,  // Bắt buộc miêu tả cơ thể khi nhân vật xuất hiện
+  noThematicClosingLine:  true,
+  noSparseDialogue:       true,
+  requireBodyDetail:      true,
+  noDetailInconsistency:  true,
 };
 
 // ─── DEFAULT LEXICON ────────────────────────────────────────────────────────
-export const DEFAULT_LEXICON: Required<SexualLexicon> = {
+export const DEFAULT_LEXICON: SexualLexicon = {
   maleParts: [
     'dương vật', 'tinh hoàn', 'đầu khấc', 'côn thịt', 'lỗ tiểu', 'lông mao',
   ],
@@ -103,35 +102,45 @@ export const DEFAULT_LEXICON: Required<SexualLexicon> = {
 
 // ─── buildLexiconPrompt ──────────────────────────────────────────────────────
 export function buildLexiconPrompt(lexicon: SexualLexicon | undefined): string {
-  const l = lexicon ?? DEFAULT_LEXICON;
+  const l = { ...DEFAULT_LEXICON, ...(lexicon || {}) };
+  const moanSounds = l.moanSounds || DEFAULT_LEXICON.moanSounds || [];
+  const sexSounds = l.sexSounds || DEFAULT_LEXICON.sexSounds || [];
+  const sexExpressions = l.sexExpressions || DEFAULT_LEXICON.sexExpressions || [];
+  const sexFluids = l.sexFluids || DEFAULT_LEXICON.sexFluids || [];
+  const maleParts = l.maleParts || DEFAULT_LEXICON.maleParts || [];
+  const femaleParts = l.femaleParts || DEFAULT_LEXICON.femaleParts || [];
+  const actions = l.actions || DEFAULT_LEXICON.actions || [];
+  const dominantActions = l.dominantActions || DEFAULT_LEXICON.dominantActions || [];
+  const states = l.states || DEFAULT_LEXICON.states || [];
+  const otherStates = l.otherStates || DEFAULT_LEXICON.otherStates || [];
   
   const moanBlock = `💬 TIẾNG RÊN & CÂU THOẠI KHI H (biến tấu theo ngữ cảnh):
-- Tiếng rên đơn (bắt buộc dùng, xen kẽ vào câu): ${l.moanSounds.slice(0, 6).join(', ')}.
+- Tiếng rên đơn (bắt buộc dùng, xen kẽ vào câu): ${moanSounds.slice(0, 6).join(', ')}.
 - Mẫu nhịp điệu tham khảo (KHÔNG COPY NGUYÊN, chỉ tham khảo để tự sáng tác):
-  • ${l.moanSounds.slice(6).join('\n  • ')}
+  • ${moanSounds.slice(6).join('\n  • ')}
 - AI kết hợp các yếu tố trên với hành động, lặp đi lặp lại nhiều lần trong cảnh H để tăng độ dài và chân thật.
 - Dùng "......" để miêu tả tiếng rên bị ngắt quãng, kéo dài câu rên.
 - ⚠️ CẤM lặp cùng 1 âm tiết rên (a, ứ, ôi) quá 3 lần liên tiếp không có nội dung xen kẽ.
 
 🔊 ÂM THANH:
-- Hôn / bú liếm: ${l.sexSounds.slice(0, 4).join(', ')}.
-- Da thịt đập vào nhau / dương vật ra vào: ${l.sexSounds.slice(4, 6).join(', ')}.
-- Bú liếm / ọc: ${l.sexSounds.slice(6).join(', ')}.
+- Hôn / bú liếm: ${sexSounds.slice(0, 4).join(', ')}.
+- Da thịt đập vào nhau / dương vật ra vào: ${sexSounds.slice(4, 6).join(', ')}.
+- Bú liếm / ọc: ${sexSounds.slice(6).join(', ')}.
 
 🎭 BIỂU CẢM CƠ THỂ KHI H:
-${l.sexExpressions.join(', ')}.
+${sexExpressions.join(', ')}.
 
 💦 DỊCH:
-${l.sexFluids.join(', ')}.`;
+${sexFluids.join(', ')}.`;
 
   return `🔞 BỘ TỪ VỰNG MIÊU TẢ TRỰC TIẾP (bắt buộc tuân thủ, không dùng ẩn dụ thay thế):
 
-👉 Bộ phận nam: ${l.maleParts.join(', ')}.
-👉 Bộ phận nữ: ${l.femaleParts.join(', ')}.
-👉 Hành động quan hệ: ${l.actions.join(', ')}.
-👉 Hành động thể hiện sự mạnh mẽ / đàn áp: ${l.dominantActions.join(', ')}.
-👉 Trạng thái - hình thái bộ phận: ${l.states.join(', ')}.
-👉 Trạng thái khác (xuất tinh, chảy...): ${l.otherStates.join(', ')}.
+👉 Bộ phận nam: ${maleParts.join(', ')}.
+👉 Bộ phận nữ: ${femaleParts.join(', ')}.
+👉 Hành động quan hệ: ${actions.join(', ')}.
+👉 Hành động thể hiện sự mạnh mẽ / đàn áp: ${dominantActions.join(', ')}.
+👉 Trạng thái - hình thái bộ phận: ${states.join(', ')}.
+👉 Trạng thái khác (xuất tinh, chảy...): ${otherStates.join(', ')}.
 
 ${moanBlock}
 
@@ -186,9 +195,9 @@ const RULE_DEFS: RuleDef[] = [
     key: 'noSelfAddPlot',
     group: 'Cấu trúc cảnh',
     severity: 'high',
-    label: 'Cấm tự thêm tình tiết mới',
-    desc: 'AI tự sáng tạo thêm biến cố, twist, hoặc tình huống ngoài mệnh lệnh tác giả.',
-    aiPrompt: '🚨 CHỈ viết đúng những gì mệnh lệnh tác giả yêu cầu. KHÔNG tự thêm biến cố mới, twist bất ngờ, tình tiết phụ, hay bất kỳ yếu tố nào không được đề cập trong mệnh lệnh. Sáng tạo trong phạm vi mệnh lệnh, không mở rộng cốt truyện tự ý.',
+    label: 'Cấm tự đổi hướng cốt truyện',
+    desc: 'AI tự tạo twist, biến cố mới làm thay đổi hướng đi của câu chuyện.',
+    aiPrompt: 'Không mở rộng cốt truyện ngoài ý đồ tác giả — nếu cần sáng tạo chi tiết nhỏ (hành động, nội tâm, môi trường) để làm cảnh sống động thì được, nhưng KHÔNG tạo biến cố/twist mới thay đổi hướng truyện.',
   },
   {
     key: 'noAddScene',
@@ -198,7 +207,6 @@ const RULE_DEFS: RuleDef[] = [
     desc: 'AI hay tự mở cảnh mới (chuyển sang phòng khác, gặp người khác, rời khỏi vị trí hiện tại) khi chưa được yêu cầu.',
     aiPrompt: 'TUYỆT ĐỐI KHÔNG tự chuyển cảnh, không mở khung cảnh mới, không đưa nhân vật di chuyển sang địa điểm khác nếu mệnh lệnh không yêu cầu. Giữ nguyên không gian và bối cảnh hiện tại.',
   },
-  // 👈 RULE MỚI: Cấm câu tổng kết/tuyên ngôn
   {
     key: 'noThematicClosingLine',
     group: 'Cấu trúc cảnh',
@@ -215,7 +223,7 @@ const RULE_DEFS: RuleDef[] = [
     severity: 'high',
     label: 'Cấm tự tạo nhân vật mới',
     desc: 'AI hay thêm "lão già qua đường", "tiểu nhị quán trọ" không có trong danh sách — làm loãng trọng tâm.',
-    aiPrompt: 'TUYỆT ĐỐI KHÔNG tự tạo nhân vật mới. Chỉ được sử dụng đúng danh sách nhân vật đã được thiết lập. Nếu cần nhân vật phụ không tên (người qua đường, lính canh...), CHỈ được mô tả mờ nhạt, không đặt tên, không tạo cá tính riêng.',
+    aiPrompt: 'TUYỆT ĐỐI KHÔNG tự tạo nhân vật mới có tên riêng dưới bất kỳ hình thức nào. Chỉ dùng đúng danh sách nhân vật đã thiết lập. Nếu cần nhân vật phụ không tên, dùng đúng chức danh phù hợp bối cảnh thời đại/vùng miền đã chọn ở mục Xưng Hô (nếu có chọn), tuyệt đối không đặt tên riêng.',
   },
   {
     key: 'noOOCPersonality',
@@ -249,7 +257,7 @@ const RULE_DEFS: RuleDef[] = [
     severity: 'high',
     label: 'Cấm viết ngoài yêu cầu',
     desc: 'AI hay thêm twist, biến cố, tình tiết "sáng tạo" ngoài mệnh lệnh — mất kiểm soát cốt truyện.',
-    aiPrompt: 'CHỈ viết đúng những gì mệnh lệnh yêu cầu. KHÔNG tự thêm biến cố mới, twist bất ngờ, tình tiết phụ không được yêu cầu. Sáng tạo trong phạm vi mệnh lệnh, không mở rộng cốt truyện tự ý.',
+    aiPrompt: 'CHỈ viết đúng phạm vi mệnh lệnh tác giả yêu cầu. KHÔNG tự thêm biến cố, twist, tình tiết phụ ngoài mệnh lệnh.',
   },
   {
     key: 'noFakeIntensity',
@@ -291,7 +299,6 @@ const RULE_DEFS: RuleDef[] = [
     desc: 'AI dùng câu từ mang cảm giác nguy hiểm, đe dọa bất thường, tạo không khí tiêu cực không cần thiết.',
     aiPrompt: '🚨 KHÔNG sử dụng câu từ mang cảm giác nguy hiểm, đe dọa, hoặc xáo rỗng không cần thiết. Giữ giọng văn ổn định, không gây hoang mang cho người đọc. KHÔNG viết theo hướng đe dọa, gây cấn bất thường, hoặc tạo bầu không khí tiêu cực ngoài dự kiến.',
   },
-  // 👈 RULE MỚI: Bắt buộc đối thoại tối thiểu 30%
   {
     key: 'noSparseDialogue',
     group: 'Nội dung & văn phong',
@@ -300,7 +307,6 @@ const RULE_DEFS: RuleDef[] = [
     desc: 'AI viết quá nhiều miêu tả, thiếu đối thoại làm câu chuyện khô cứng, thiếu sinh khí.',
     aiPrompt: 'BẮT BUỘC đối thoại chiếm tối thiểu 30% tổng dung lượng đoạn viết. Mỗi nhân vật chính trong cảnh phải có ít nhất 3-5 câu thoại thể hiện tính cách. Thoại phải tự nhiên, đúng giọng điệu nhân vật, không viết thoại nền tẻ nhạt. Lồng đối thoại xen kẽ hành động và miêu tả nội tâm.',
   },
-  // 👈 RULE MỚI: Bắt buộc miêu tả cơ thể khi nhân vật xuất hiện
   {
     key: 'requireBodyDetail',
     group: 'Nội dung & văn phong',
@@ -309,15 +315,23 @@ const RULE_DEFS: RuleDef[] = [
     desc: 'AI thiếu miêu tả ngoại hình cơ thể khi nhân vật xuất hiện hoặc có hành động, gây khô khan.',
     aiPrompt: 'Mỗi lần nhân vật xuất hiện hoặc có hành động quan trọng: PHẢI có 1-2 câu miêu tả cơ thể/thân hình (dáng vóc, tư thế, cử chỉ, chuyển động cơ thể) gắn với khoảnh khắc đó. Không cần dài dòng mỗi lần, nhưng phải có ít nhất 1 chi tiết cụ thể (VD: thân hình rắn rỏi, bàn tay to, bước đi nhẹ nhàng, vai rộng, vòng eo thon...). KHÔNG viết kiểu "hắn đứng đó" mà không kèm miêu tả cơ thể.',
   },
+  {
+    key: 'noDetailInconsistency',
+    group: 'Nội dung & văn phong',
+    severity: 'high',
+    label: 'Cấm mâu thuẫn chi tiết với các chương trước',
+    desc: 'AI hay viết nhân vật đã chết vẫn xuất hiện, bối cảnh thay đổi không logic, chi tiết quan trọng bị quên.',
+    aiPrompt: '🚨 NGHIÊM CẤM mâu thuẫn với bất kỳ chi tiết nào đã được thiết lập trong các chương trước: nhân vật đã chết KHÔNG xuất hiện, địa điểm đã bị phá hủy KHÔNG còn nguyên vẹn, mối quan hệ đã thay đổi KHÔNG quay về trạng thái cũ, đồ vật đã mất KHÔNG tự nhiên xuất hiện, thông tin nhân vật đã khai báo KHÔNG được thay đổi. Nếu không nhớ rõ, phải dừng lại và hỏi tác giả thay vì suy diễn tùy tiện.',
+  },
 
   // ── Nhóm: Cảnh H ──
   {
     key: 'noSkipNoAvoid',
     group: 'Cảnh H',
     severity: 'high',
-    label: 'Cấm viết tránh, nhảy cóc, tóm tắt cảnh H',
+    label: 'Cấm né tránh cảnh H',
     desc: 'AI hay né cảnh H bằng cách tóm tắt "đêm hôm đó", "một lúc lâu sau", hoặc nhảy sang sáng hôm sau.',
-    aiPrompt: '🚨 TUYỆT ĐỐI KHÔNG viết giảm, viết tránh, tóm tắt, hoặc nhảy cóc qua cảnh quan hệ tình dục. Phải viết đầy đủ từng chi tiết: bộ phận sinh dục, hành động, cảm giác, tiếng rên, âm thanh, biểu cảm. Cấm dùng "sau đó", "đêm hôm đó", "một lúc lâu sau", "sáng hôm sau" để bỏ qua cảnh H. Viết liên tục, từng giây từng phút của cuộc giao hợp.',
+    aiPrompt: '🚨 TUYỆT ĐỐI KHÔNG né, tóm tắt, hay nhảy cóc qua cảnh H (cấm "sau đó", "đêm hôm đó", "sáng hôm sau" để bỏ qua). Viết liên tục từng khoảnh khắc.',
   },
   {
     key: 'requireDetailedSexScene',
@@ -325,25 +339,7 @@ const RULE_DEFS: RuleDef[] = [
     severity: 'high',
     label: 'Bắt buộc viết chi tiết cảnh H',
     desc: 'Yêu cầu AI phải viết cảnh H chi tiết, không được tóm tắt hoặc né tránh.',
-    aiPrompt: '🚨 BẮT BUỘC viết cảnh quan hệ tình dục chi tiết, đầy đủ, sống động khi mệnh lệnh yêu cầu. Phải bao gồm: miêu tả bộ phận sinh dục (dùng đúng từ trong bộ từ vựng), hành động cụ thể (thao/dập/nhấp/ra vào), cảm xúc và khoái cảm, tiếng rên và âm thanh (loẹt loẹt, phạch phạch), biểu cảm cơ thể (co giật, run rẩy, trợn mắt, há miệng), dịch (tinh trùng, dâm thủy). Không được viết kiểu "rồi họ làm tình", "họ trao nhau khoái cảm" mà không có chi tiết cụ thể.',
-  },
-
-  // ── Nhóm: Xưng hô & nhất quán ──
-  {
-    key: 'noModernSlangInAncient',
-    group: 'Xưng hô & nhất quán',
-    severity: 'high',
-    label: 'Cấm slang / từ hiện đại trong cổ trang',
-    desc: '"Anh yêu em", "okay", "vibe", "chill", "flex" trong truyện tu tiên/cổ trang — phá vỡ không khí hoàn toàn.',
-    aiPrompt: 'Trong bối cảnh cổ trang / tu tiên / võ hiệp: TUYỆT ĐỐI KHÔNG dùng xưng hô hiện đại (anh/em kiểu lứa đôi, bạn, mình, tôi thông thường), slang mạng (okay, vibe, toxic, chill, flex, slay), hay cấu trúc câu hiện đại. Thay bằng: ta/ngươi/nàng/hắn/phu quân/phu nhân/đạo hữu/tiền bối/huynh/muội — tùy quan hệ đã thiết lập.',
-  },
-  {
-    key: 'noAncientToneInModern',
-    group: 'Xưng hô & nhất quán',
-    severity: 'medium',
-    label: 'Cấm từ ngữ cổ lỗi trong truyện hiện đại',
-    desc: '"Ngươi thật đáng chết!", "Ta sẽ diệt ngươi!" trong truyện đô thị hiện đại — nghe kỳ cục.',
-    aiPrompt: 'Trong bối cảnh hiện đại / đô thị: KHÔNG dùng từ ngữ Hán Việt cổ lỗi (ta/ngươi, phu quân, đạo hữu, tên tiện nhân) trừ khi nhân vật đang đóng kịch hoặc có lý do đặc biệt. Giữ ngôn ngữ tự nhiên, đương đại.',
+    aiPrompt: '🚨 Cảnh H phải đầy đủ: bộ phận sinh dục (đúng từ vựng theo bối cảnh), hành động cụ thể, tiếng rên/âm thanh, biểu cảm cơ thể, dịch thể. Không viết chung chung kiểu "họ làm tình", "trao nhau khoái cảm".',
   },
 ];
 
@@ -353,14 +349,199 @@ const GROUP_COLORS: Record<string, string> = {
   'Nhân vật':             'text-purple-400 border-purple-800/40 bg-purple-950/20',
   'Nội dung & văn phong': 'text-amber-400 border-amber-800/40 bg-amber-950/20',
   'Cảnh H':               'text-pink-400 border-pink-800/40 bg-pink-950/20',
-  'Xưng hô & nhất quán':  'text-emerald-400 border-emerald-800/40 bg-emerald-950/20',
 };
 
 // ─── Xuất buildHardRulesPrompt ────────────────────────────────────────────────
-export function buildHardRulesPrompt(hardRules: HardRules): string {
-  const active = RULE_DEFS.filter(r => hardRules[r.key]);
+export function buildHardRulesPrompt(hardRules: HardRules | undefined): string {
+  const rules = hardRules || DEFAULT_HARD_RULES;
+  const active = RULE_DEFS.filter(r => rules[r.key]);
   if (active.length === 0) return '';
   return active.map((r, i) => `${i + 1}. [${r.label.toUpperCase()}] ${r.aiPrompt}`).join('\n');
+}
+
+// ─── COMPONENT: AddressTermSelector ──────────────────────────────────────────
+function AddressTermSelector({
+  state,
+  updateState,
+}: {
+  state: NovelState;
+  updateState: (updater: (prev: NovelState) => void) => void;
+}) {
+  // ✅ ĐỔI: đọc từ settingId thay vì addressTermSetId
+  const selectedId = state.config.settingId || '';
+  const selected = ADDRESS_TERM_PRESETS.find(p => p.id === selectedId);
+  const customTerms = state.config.customAddressTerms || {};
+  const [showPreview, setShowPreview] = useState(false);
+  const [editMode, setEditMode] = useState(false);
+
+  const currentTerms = selected 
+    ? { ...selected, ...customTerms } 
+    : null;
+
+  const updateCustomTerm = (field: string, value: string[]) => {
+    updateState((prev) => {
+      if (!prev.config.customAddressTerms) prev.config.customAddressTerms = {};
+      (prev.config.customAddressTerms as any)[field] = value;
+    });
+  };
+
+  const resetCustomTerms = () => {
+    updateState((prev) => {
+      prev.config.customAddressTerms = {};
+    });
+  };
+
+  const renderEditArea = () => {
+    if (!selected) return null;
+    const base = selected;
+
+    // ✅ ĐÃ XÓA sexualTermsOverride — chỉ giữ 7 fields an toàn
+    const fields: { key: keyof AddressTermSet; label: string; desc: string }[] = [
+      { key: 'genericTitles', label: '📋 Chức danh chung', desc: 'Cách gọi các nhân vật phụ không tên theo nghề nghiệp/chức vụ' },
+      { key: 'familyTerms', label: '👨‍👩‍👧‍👦 Xưng hô gia đình', desc: 'Cha mẹ, anh chị em, họ hàng nội ngoại' },
+      { key: 'socialTerms', label: '🤝 Xưng hô xã hội', desc: 'Bạn bè, đồng môn, người quen, quan hệ xã giao' },
+      { key: 'romanticTerms', label: '💕 Xưng hô lãng mạn', desc: 'Vợ chồng, người yêu, tình nhân (khi gần gũi)' },
+      { key: 'honorifics', label: '🏛️ Kính ngữ - tôn xưng', desc: 'Vua chúa, quan lại, thầy trò, tông môn, bề trên' },
+      { key: 'insultTerms', label: '💢 Chửi bới - miệt thị', desc: 'Lăng mạ, khinh thường, khiêu khích' },
+      { key: 'forbiddenExamples', label: '🚫 Ví dụ cấm dùng', desc: 'Các từ/cách gọi tuyệt đối không được dùng trong bối cảnh này' },
+    ];
+
+    return (
+      <div className="mt-4 space-y-4 border-t border-emerald-800/30 pt-4">
+        <div className="flex items-center justify-between">
+          <p className="text-[10px] text-emerald-400/70">
+            ✏️ Đang chỉnh sửa preset <strong>"{selected.name}"</strong>
+          </p>
+          <button
+            onClick={resetCustomTerms}
+            className="text-[10px] text-red-400 hover:text-red-300 underline"
+          >
+            Reset về mặc định
+          </button>
+        </div>
+
+        {fields.map(({ key, label, desc }) => {
+          const baseValue = base[key as keyof AddressTermSet] as string[];
+          const customValue = customTerms[key as keyof AddressTermSet] as string[] | undefined;
+          const value = customValue ?? baseValue;
+
+          // ✅ Kiểm tra an toàn: nếu value không phải array, chuyển thành array rỗng
+          const safeValue = Array.isArray(value) ? value : [];
+
+          return (
+            <div key={key}>
+              <label className="block text-[10px] font-semibold text-gray-300 mb-1">
+                {label}
+                <span className="text-gray-500 font-normal ml-2 text-[9px]">{desc}</span>
+              </label>
+              <textarea
+                rows={2}
+                value={safeValue.join('\n')}
+                onChange={(e) => {
+                  const lines = e.target.value.split('\n').map(s => s.trim()).filter(Boolean);
+                  updateCustomTerm(key, lines);
+                }}
+                className="w-full bg-neutral-950 border border-neutral-800 rounded-lg p-2 text-[11px] text-gray-200 focus:outline-none focus:border-emerald-600 resize-y"
+                spellCheck={false}
+              />
+            </div>
+          );
+        })}
+      </div>
+    );
+  };
+
+  return (
+    <div className="bg-neutral-900 border border-emerald-900/30 rounded-2xl overflow-hidden">
+      <div className="px-5 py-4 border-b border-emerald-900/30">
+        <div className="flex items-center justify-between">
+          <div className="flex items-center gap-2">
+            <RefreshCw className="w-4 h-4 text-emerald-400" />
+            <h3 className="text-sm font-bold text-emerald-400">👤 Xưng Hô & Bối Cảnh Thời Đại</h3>
+          </div>
+          <div className="flex items-center gap-2">
+            {selected && (
+              <button
+                onClick={() => setEditMode(!editMode)}
+                className={`px-3 py-1.5 rounded-lg text-[10px] font-semibold transition-colors ${
+                  editMode
+                    ? 'bg-emerald-950/40 border border-emerald-800/40 text-emerald-400'
+                    : 'bg-neutral-800 hover:bg-neutral-700 text-gray-300'
+                }`}
+              >
+                {editMode ? '✅ Đóng chỉnh sửa' : '✏️ Tùy chỉnh'}
+              </button>
+            )}
+            <button
+              onClick={() => setShowPreview(!showPreview)}
+              className="px-3 py-1.5 bg-neutral-800 hover:bg-neutral-700 text-gray-300 rounded-lg text-[10px] font-semibold transition-colors"
+            >
+              {showPreview ? 'Ẩn preview' : 'Xem preview'}
+            </button>
+          </div>
+        </div>
+      </div>
+
+      <div className="px-5 py-4 space-y-3">
+        <p className="text-[10px] text-gray-400 leading-relaxed">
+          Chọn đúng bối cảnh để AI dùng xưng hô, cách chửi bới, từ miệt thị phù hợp với thời đại và vùng miền.
+          Hệ thống sẽ tự động xây dựng chỉ thị tương ứng.
+        </p>
+
+        <div>
+          <label className="block text-[10px] text-gray-400 mb-1">Chọn bối cảnh xưng hô</label>
+          <select
+            value={selectedId}
+            onChange={e => {
+              updateState(prev => { 
+                // ✅ ĐỔI: set vào settingId thay vì addressTermSetId
+                prev.config.settingId = e.target.value;
+                prev.config.customAddressTerms = {};
+              });
+              setEditMode(false);
+            }}
+            className="w-full bg-neutral-950 border border-neutral-800 rounded-lg p-2.5 text-xs text-gray-200 focus:outline-none focus:border-emerald-600"
+          >
+            <option value="">-- Không chọn (dùng mặc định) --</option>
+            {ADDRESS_TERM_PRESETS.map(p => (
+              <option key={p.id} value={p.id}>{p.name}</option>
+            ))}
+          </select>
+        </div>
+
+        {selected && (
+          <div>
+            <p className="text-[10px] text-gray-500 leading-relaxed">
+              <span className="text-emerald-400 font-semibold">📌</span> {selected.description}
+            </p>
+            {editMode && renderEditArea()}
+          </div>
+        )}
+
+        {selected && showPreview && currentTerms && (
+          <div className="p-3 bg-neutral-950 border border-emerald-800/30 rounded-xl">
+            <p className="text-[9px] text-emerald-400/70 font-mono whitespace-pre-wrap leading-relaxed max-h-40 overflow-y-auto">
+              {buildAddressTermPrompt(currentTerms)}
+            </p>
+          </div>
+        )}
+
+        {!selected && (
+          <div className="p-3 bg-amber-950/20 border border-amber-800/40 rounded-lg text-[10px] text-amber-300 flex items-center gap-2">
+            <AlertCircle className="w-3.5 h-3.5 shrink-0" />
+            <span>⚠️ Chưa chọn bối cảnh — AI sẽ dùng xưng hô mặc định (hãy chọn ở Trang 2 hoặc tại đây)</span>
+          </div>
+        )}
+
+        {selected && editMode && (
+          <div className="p-2.5 bg-emerald-950/20 border border-emerald-800/40 rounded-lg text-[10px] text-emerald-300/70 flex items-center gap-2">
+            <Info className="w-3.5 h-3.5 shrink-0" />
+            <span>💡 Các thay đổi sẽ được lưu tự động và ưu tiên hơn preset gốc. Mỗi dòng = 1 cách gọi.</span>
+          </div>
+        )}
+      </div>
+    </div>
+  );
 }
 
 // ─── Toggle component ─────────────────────────────────────────────────────────
@@ -430,12 +611,12 @@ const LORE_CATEGORIES = [
   '🔮 Foreshadowing & Ẩn ý',
   '💬 Thuật ngữ đặc biệt',
   '🎭 Phong tục & Văn hóa',
+  '🚗 Chi tiết cố định',
   '📝 Ghi chú tác giả',
   '🔧 Khác',
 ];
 
 // ─── PRESET GUIDELINES ──────────────────────────────────────────────────────
-// 👈 SỬA: giới hạn phạm vi "linh hoạt sáng tạo"
 const REFERENCE_GUIDELINES = `📝 HƯỚNG DẪN THAM KHẢO - LINH HOẠT, KHÔNG RẬP KHUÔN:
 
 ⚠️ QUAN TRỌNG: Phần dưới đây là HƯỚNG DẪN VỀ VĂN PHONG và CÁCH DIỄN ĐẠT, không phải quy tắc cốt truyện.
@@ -475,7 +656,7 @@ const REFERENCE_GUIDELINES = `📝 HƯỚNG DẪN THAM KHẢO - LINH HOẠT, KH�
 - Hưng phấn: mắt sáng rực, nụ cười rạng rỡ
 - Kìm nén: siết chặt tay, cổ họng nghẹn lại
 
-🖐️ CỬ CHỈ & HÀNH ĐỘNG:
+🖐️ CỬ CHỉ & HÀNH ĐỘNG:
 - Cử chỉ, tư thế, động tác cơ thể
 - Phù hợp với tình huống và tính cách nhân vật
 - Tự nhiên, không cường điệu hóa
@@ -542,26 +723,32 @@ function LoreSection({
   const [expanded, setExpanded]     = useState(true);
   const [isAdding, setIsAdding]     = useState(false);
   const [editingId, setEditingId]   = useState<string | null>(null);
+  const [confirmDeleteId, setConfirmDeleteId] = useState<string | null>(null);
+  const [formError, setFormError] = useState<string | null>(null);
+
   const [form, setForm] = useState<Omit<LoreEntry, 'id'>>({
     category: LORE_CATEGORIES[0],
     title: '',
     content: '',
   });
 
-  const resetForm = () => setForm({ category: LORE_CATEGORIES[0], title: '', content: '' });
+  const resetForm = () => {
+    setForm({ category: LORE_CATEGORIES[0], title: '', content: '' });
+    setFormError(null);
+  };
 
   const handleSave = () => {
-    if (!form.title.trim() || !form.content.trim()) return;
-    
-    // Check duplicate title
+    if (!form.title?.trim() || !form.content?.trim()) return;
+
     const exists = loreEntries.some(e => 
-      e.title.toLowerCase() === form.title.toLowerCase() && 
+      (e.title || '').toLowerCase() === (form.title || '').toLowerCase() && 
       e.id !== editingId
     );
     if (exists) {
-      alert('⚠️ Tiêu đề đã tồn tại! Vui lòng đặt tên khác.');
+      setFormError('⚠️ Tiêu đề đã tồn tại! Vui lòng đặt tên khác.');
       return;
     }
+    setFormError(null);
 
     updateState((prev) => {
       if (!prev.rules.loreEntries) prev.rules.loreEntries = [];
@@ -578,28 +765,33 @@ function LoreSection({
   };
 
   const handleEdit = (entry: LoreEntry) => {
-    setForm({ category: entry.category, title: entry.title, content: entry.content });
+    setForm({ category: entry.category || LORE_CATEGORIES[0], title: entry.title || '', content: entry.content || '' });
     setEditingId(entry.id);
     setIsAdding(true);
     setExpanded(true);
+    setFormError(null);
   };
 
-  const handleDelete = (id: string) => {
-    if (!confirm('Xoá mục lore này?')) return;
+  const requestDelete = (id: string) => setConfirmDeleteId(id);
+  const cancelDelete = () => setConfirmDeleteId(null);
+  const confirmDelete = (id: string) => {
     updateState((prev) => {
       prev.rules.loreEntries = (prev.rules.loreEntries ?? []).filter(e => e.id !== id);
     });
+    setConfirmDeleteId(null);
   };
 
   const handleCancel = () => {
     resetForm();
     setIsAdding(false);
     setEditingId(null);
+    setFormError(null);
   };
 
   const grouped = loreEntries.reduce((acc, e) => {
-    if (!acc[e.category]) acc[e.category] = [];
-    acc[e.category].push(e);
+    const cat = e.category || 'Khác';
+    if (!acc[cat]) acc[cat] = [];
+    acc[cat].push(e);
     return acc;
   }, {} as Record<string, LoreEntry[]>);
 
@@ -696,12 +888,15 @@ function LoreSection({
               </div>
 
               <div className="flex justify-end gap-2">
+                {formError && (
+                  <p className="text-[10px] text-red-400 mr-auto self-center">{formError}</p>
+                )}
                 <button onClick={handleCancel} className="px-3 py-1.5 hover:bg-neutral-800 rounded-lg text-xs text-gray-400">
                   Hủy
                 </button>
                 <button
                   onClick={handleSave}
-                  disabled={!form.title.trim() || !form.content.trim()}
+                  disabled={!form.title?.trim() || !form.content?.trim()}
                   className="px-5 py-1.5 bg-indigo-700 hover:bg-indigo-600 disabled:opacity-40 disabled:cursor-not-allowed text-white rounded-lg text-xs font-semibold flex items-center gap-1.5"
                 >
                   <Check className="w-3.5 h-3.5" /> Lưu mục
@@ -734,7 +929,7 @@ function LoreSection({
                     {entries.map(entry => (
                       <div
                         key={entry.id}
-                        className="bg-neutral-950/60 border border-neutral-800 hover:border-indigo-900/40 rounded-xl p-3 transition-colors group"
+                        className={`bg-neutral-950/60 border border-neutral-800 hover:border-indigo-900/40 rounded-xl p-3 transition-colors group`}
                       >
                         <div className="flex items-start justify-between gap-2">
                           <div className="flex-1 min-w-0">
@@ -748,19 +943,40 @@ function LoreSection({
                               {entry.content}
                             </p>
                           </div>
-                          <div className="flex gap-1 opacity-0 group-hover:opacity-100 transition-opacity shrink-0">
+                          <div className={`flex gap-1 transition-opacity shrink-0 ${
+                            confirmDeleteId === entry.id ? 'opacity-100' : 'opacity-0 group-hover:opacity-100'
+                          }`}>
                             <button
                               onClick={() => handleEdit(entry)}
                               className="p-1 text-neutral-500 hover:text-indigo-400 hover:bg-neutral-800 rounded-lg transition-colors"
                             >
                               <Edit2 className="w-3 h-3" />
                             </button>
-                            <button
-                              onClick={() => handleDelete(entry.id)}
-                              className="p-1 text-neutral-500 hover:text-red-400 hover:bg-neutral-800 rounded-lg transition-colors"
-                            >
-                              <Trash2 className="w-3 h-3" />
-                            </button>
+
+                            {confirmDeleteId === entry.id ? (
+                              <div className="flex items-center gap-1 bg-red-950/40 border border-red-800/50 rounded-lg px-1.5 py-0.5">
+                                <span className="text-[9px] text-red-300 whitespace-nowrap">Xóa?</span>
+                                <button
+                                  onClick={() => confirmDelete(entry.id)}
+                                  className="p-0.5 text-red-400 hover:text-red-300"
+                                >
+                                  <Check className="w-3 h-3" />
+                                </button>
+                                <button
+                                  onClick={cancelDelete}
+                                  className="p-0.5 text-gray-500 hover:text-gray-300"
+                                >
+                                  <X className="w-3 h-3" />
+                                </button>
+                              </div>
+                            ) : (
+                              <button
+                                onClick={() => requestDelete(entry.id)}
+                                className="p-1 text-neutral-500 hover:text-red-400 hover:bg-neutral-800 rounded-lg transition-colors"
+                              >
+                                <Trash2 className="w-3 h-3" />
+                              </button>
+                            )}
                           </div>
                         </div>
                       </div>
@@ -801,18 +1017,21 @@ function LexiconEditor({
 
   const parseLines = (val: string) => val.split('\n').map(s => s.trim()).filter(Boolean);
 
-  const renderArea = (label: string, value: string[], onChange: (v: string[]) => void) => (
-    <div>
-      <label className="block text-[10px] text-gray-400 mb-1 font-semibold">{label}</label>
-      <textarea
-        rows={3}
-        value={value.join('\n')}
-        onChange={(e) => onChange(parseLines(e.target.value))}
-        className="w-full bg-neutral-950 border border-neutral-800 rounded-lg p-2 text-[11px] text-gray-200 focus:outline-none focus:border-pink-600 resize-y"
-        spellCheck={false}
-      />
-    </div>
-  );
+  const renderArea = (label: string, value: string[] | undefined, onChange: (v: string[]) => void) => {
+    const list = value || [];
+    return (
+      <div>
+        <label className="block text-[10px] text-gray-400 mb-1 font-semibold">{label}</label>
+        <textarea
+          rows={3}
+          value={list.join('\n')}
+          onChange={(e) => onChange(parseLines(e.target.value))}
+          className="w-full bg-neutral-950 border border-neutral-800 rounded-lg p-2 text-[11px] text-gray-200 focus:outline-none focus:border-pink-600 resize-y"
+          spellCheck={false}
+        />
+      </div>
+    );
+  };
 
   return (
     <div className="bg-gradient-to-br from-pink-950/20 via-neutral-900 to-neutral-900 border border-pink-700/30 rounded-2xl overflow-hidden">
@@ -923,6 +1142,7 @@ export default function Page4Rules({ state, updateState, onNavigate }: Page4Rule
     rules.forbidden?.includes('🚫 DANH SÁCH CẤM KỴ BỔ SUNG') || false
   );
   const [showPromptPreview, setShowPromptPreview] = useState(false);
+  const [confirmingRemove, setConfirmingRemove] = useState<'guide' | 'forbidden' | null>(null);
 
   const hardRules: HardRules = rules.hardRules ?? DEFAULT_HARD_RULES;
 
@@ -938,7 +1158,6 @@ export default function Page4Rules({ state, updateState, onNavigate }: Page4Rule
 
   const groups = Array.from(new Set(RULE_DEFS.map(r => r.group)));
 
-  // ─── Thêm hướng dẫn tham khảo (có lexicon) ──────────────────────────────
   const addReferenceGuide = () => {
     const lexiconBlock = buildLexiconPrompt(state.rules.sexualLexicon);
     const content = REFERENCE_GUIDELINES + '\n\n' + lexiconBlock;
@@ -952,21 +1171,14 @@ export default function Page4Rules({ state, updateState, onNavigate }: Page4Rule
   };
 
   const removeGuide = () => {
-    if (confirm('Xóa hướng dẫn tham khảo?')) {
-      const current = rules.mandatory || '';
-      const regex = new RegExp(
-        `${GUIDE_START_MARKER}[\\s\\S]*?${GUIDE_END_MARKER}`,
-        'gm'
-      );
-      const cleaned = current.replace(regex, '').replace(/\n{3,}/g, '\n\n').trim();
-      updateState((prev) => {
-        prev.rules.mandatory = cleaned;
-      });
-      setGuideAdded(false);
-    }
+    const current = rules.mandatory || '';
+    const regex = new RegExp(`${GUIDE_START_MARKER}[\\s\\S]*?${GUIDE_END_MARKER}`, 'gm');
+    const cleaned = current.replace(regex, '').replace(/\n{3,}/g, '\n\n').trim();
+    updateState((prev) => { prev.rules.mandatory = cleaned; });
+    setGuideAdded(false);
+    setConfirmingRemove(null);
   };
 
-  // ─── Thêm danh sách cấm kỵ bổ sung ─────────────────────────────────────
   const addForbiddenGuide = () => {
     updateState((prev) => {
       prev.rules.forbidden = prev.rules.forbidden
@@ -977,19 +1189,16 @@ export default function Page4Rules({ state, updateState, onNavigate }: Page4Rule
   };
 
   const removeForbiddenGuide = () => {
-    if (confirm('Xóa danh sách cấm kỵ bổ sung?')) {
-      const current = rules.forbidden || '';
-      const idx = current.indexOf(FORBIDDEN_GUIDELINES);
-      const cleaned = idx === -1
-        ? current
-        : (current.slice(0, idx) + current.slice(idx + FORBIDDEN_GUIDELINES.length))
-            .replace(/\n{3,}/g, '\n\n')
-            .trim();
-      updateState((prev) => {
-        prev.rules.forbidden = cleaned;
-      });
-      setForbiddenGuideAdded(false);
-    }
+    const current = rules.forbidden || '';
+    const idx = current.indexOf(FORBIDDEN_GUIDELINES);
+    const cleaned = idx === -1
+      ? current
+      : (current.slice(0, idx) + current.slice(idx + FORBIDDEN_GUIDELINES.length))
+          .replace(/\n{3,}/g, '\n\n')
+          .trim();
+    updateState((prev) => { prev.rules.forbidden = cleaned; });
+    setForbiddenGuideAdded(false);
+    setConfirmingRemove(null);
   };
 
   return (
@@ -1005,6 +1214,9 @@ export default function Page4Rules({ state, updateState, onNavigate }: Page4Rule
       </div>
 
       <div className="space-y-6">
+        {/* ─── AddressTermSelector ─────────────────────────────────────────── */}
+        <AddressTermSelector state={state} updateState={updateState} />
+
         {/* ─── LexiconEditor ──────────────────────────────────────────────── */}
         <LexiconEditor state={state} updateState={updateState} />
 
@@ -1025,9 +1237,25 @@ export default function Page4Rules({ state, updateState, onNavigate }: Page4Rule
                   >
                     <Plus className="w-3.5 h-3.5" /> Thêm hướng dẫn
                   </button>
+                ) : confirmingRemove === 'guide' ? (
+                  <div className="flex items-center gap-1.5">
+                    <span className="text-[10px] text-red-300">Xóa hướng dẫn?</span>
+                    <button
+                      onClick={removeGuide}
+                      className="px-2.5 py-1.5 bg-red-700 hover:bg-red-600 text-white rounded-lg text-[10px] font-semibold"
+                    >
+                      Xác nhận
+                    </button>
+                    <button
+                      onClick={() => setConfirmingRemove(null)}
+                      className="px-2.5 py-1.5 bg-neutral-800 hover:bg-neutral-700 text-gray-300 rounded-lg text-[10px]"
+                    >
+                      Hủy
+                    </button>
+                  </div>
                 ) : (
                   <button
-                    onClick={removeGuide}
+                    onClick={() => setConfirmingRemove('guide')}
                     className="px-3 py-1.5 bg-red-950/40 border border-red-800/40 hover:bg-red-950/60 text-red-400 rounded-lg text-[10px] transition-colors"
                   >
                     <Trash2 className="w-3.5 h-3.5 inline mr-1" /> Xóa
@@ -1121,7 +1349,7 @@ export default function Page4Rules({ state, updateState, onNavigate }: Page4Rule
                         <RuleToggle
                           key={def.key}
                           def={def}
-                          value={hardRules[def.key]}
+                          value={!!hardRules[def.key]}
                           onChange={(v) => setHardRule(def.key, v)}
                         />
                       ))}
@@ -1175,9 +1403,25 @@ export default function Page4Rules({ state, updateState, onNavigate }: Page4Rule
                 >
                   <Plus className="w-3.5 h-3.5" /> Thêm gợi ý cấm
                 </button>
+              ) : confirmingRemove === 'forbidden' ? (
+                <div className="flex items-center gap-1.5 shrink-0">
+                  <span className="text-[10px] text-red-300 whitespace-nowrap">Xóa danh sách?</span>
+                  <button
+                    onClick={removeForbiddenGuide}
+                    className="px-2.5 py-1.5 bg-red-700 hover:bg-red-600 text-white rounded-lg text-[10px] font-semibold"
+                  >
+                    Xác nhận
+                  </button>
+                  <button
+                    onClick={() => setConfirmingRemove(null)}
+                    className="px-2.5 py-1.5 bg-neutral-800 hover:bg-neutral-700 text-gray-300 rounded-lg text-[10px]"
+                  >
+                    Hủy
+                  </button>
+                </div>
               ) : (
                 <button
-                  onClick={removeForbiddenGuide}
+                  onClick={() => setConfirmingRemove('forbidden')}
                   className="px-3 py-1.5 bg-neutral-950/40 border border-neutral-800/40 hover:bg-neutral-950/60 text-gray-400 rounded-lg text-[10px] transition-colors shrink-0"
                 >
                   <Trash2 className="w-3.5 h-3.5 inline mr-1" /> Xóa
@@ -1299,7 +1543,6 @@ export default function Page4Rules({ state, updateState, onNavigate }: Page4Rule
         </div>
       </div>
 
-      {/* ─── Prompt Preview Modal ── */}
       {showPromptPreview && (
         <PromptPreview state={state} onClose={() => setShowPromptPreview(false)} />
       )}
@@ -1307,7 +1550,6 @@ export default function Page4Rules({ state, updateState, onNavigate }: Page4Rule
   );
 }
 
-// ─── Helper: formatFileSize ──────────────────────────────────────────────────
 function formatFileSize(bytes: number): string {
   if (bytes < 1024) return `${bytes} B`;
   if (bytes < 1024 * 1024) return `${(bytes / 1024).toFixed(1)} KB`;
