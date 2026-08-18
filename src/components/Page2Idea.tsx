@@ -33,6 +33,12 @@ export default function Page2Idea({ state, updateState, onNavigate }: Page2IdeaP
   const [isAnalyzing, setIsAnalyzing] = useState(false);
   const [analysisError, setAnalysisError] = useState<string | null>(null);
   const [isAnalysisPanelOpen, setIsAnalysisPanelOpen] = useState(true);
+  
+  // ─── NSFW CHECKBOX STATES ──────────────────────────────────────────────
+  const [nsfwExpand, setNsfwExpand] = useState(true);
+  const [nsfwAnalyze, setNsfwAnalyze] = useState(true);
+  const [applyFlash, setApplyFlash] = useState(false);
+  
   const { config } = state;
 
   // ─── C1: BỐI CẢNH & THỜI ĐẠI ──────────────────────────────────────────────
@@ -142,6 +148,7 @@ Viết một bản mở rộng chi tiết (200-350 chữ) bao gồm:
         prompt: userPrompt,
         systemInstruction: systemPrompt,
         provider: activeKey?.provider || 'gemini',
+        bypassContentFilter: nsfwExpand,
       };
 
       if (activeKey) {
@@ -224,6 +231,7 @@ Trả về CHÍNH XÁC một object JSON:
         systemInstruction: systemPrompt,
         provider: activeKey.provider,
         customApiKey: activeKey.key,
+        bypassContentFilter: nsfwAnalyze,
       };
       if (activeKey.customModel) body.customModel = activeKey.customModel;
       if (['openai', 'claude', 'grok', 'antigravity'].includes(activeKey.provider)) {
@@ -256,6 +264,7 @@ Trả về CHÍNH XÁC một object JSON:
       });
       setIsAnalysisPanelOpen(true);
     } catch (err: any) {
+      console.error('[handleAnalyzeFoundation]', err);
       setAnalysisError(`❌ Không phân tích được: ${err.message || 'Lỗi không xác định'}`);
       setTimeout(() => setAnalysisError(null), 6000);
     } finally {
@@ -275,6 +284,8 @@ Trả về CHÍNH XÁC một object JSON:
       if (a.missingSuggestions) merged += `\n\nGhi chú bổ sung:\n${a.missingSuggestions}`;
       prev.config.foundationIdea = merged;
     });
+    setApplyFlash(true);
+    setTimeout(() => setApplyFlash(false), 1800);
   };
 
   const levelColor = (level?: string) => {
@@ -540,20 +551,32 @@ Trả về CHÍNH XÁC một object JSON:
 
         {/* ─── C5: BỐI CẢNH & CỐT TRUYỆN + AI EXPAND ────────────────────── */}
         <div className="bg-neutral-900/80 border border-neutral-800 rounded-xl p-6">
-          <div className="flex items-center justify-between mb-1">
+          <div className="flex items-center justify-between mb-1 flex-wrap gap-2">
             <label className="block text-sm font-bold text-gray-200">Bối cảnh & Cốt truyện</label>
-            <button
-              onClick={handleAiExpand}
-              disabled={!config.context || isAiExpanding}
-              className={`flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-xs font-semibold transition-all ${
-                !config.context || isAiExpanding
-                  ? 'bg-neutral-800 text-gray-500 cursor-not-allowed'
-                  : 'bg-gradient-to-r from-purple-900/50 to-purple-800/30 border border-purple-700/50 text-purple-300 hover:from-purple-800/60 hover:to-purple-700/40'
-              }`}
-            >
-              <Wand2 className="w-3.5 h-3.5" />
-              {isAiExpanding ? 'Đang mở rộng...' : '🪄 AI mở rộng ý tưởng'}
-            </button>
+            <div className="flex items-center gap-3">
+              <label className="flex items-center gap-1.5 text-[10px] text-gray-400 cursor-pointer select-none">
+                <input
+                  type="checkbox"
+                  checked={nsfwExpand}
+                  onChange={(e) => setNsfwExpand(e.target.checked)}
+                  className="w-3.5 h-3.5 accent-red-600"
+                />
+                NSFW/18+
+              </label>
+              <button
+                type="button"
+                onClick={handleAiExpand}
+                disabled={!config.context || isAiExpanding}
+                className={`flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-xs font-semibold transition-all ${
+                  !config.context || isAiExpanding
+                    ? 'bg-neutral-800 text-gray-500 cursor-not-allowed'
+                    : 'bg-gradient-to-r from-purple-900/50 to-purple-800/30 border border-purple-700/50 text-purple-300 hover:from-purple-800/60 hover:to-purple-700/40'
+                }`}
+              >
+                <Wand2 className="w-3.5 h-3.5" />
+                {isAiExpanding ? 'Đang mở rộng...' : '🪄 AI mở rộng ý tưởng'}
+              </button>
+            </div>
           </div>
           <p className="text-xs text-gray-500 mb-3">Mô tả thế giới, thời đại, hoặc tóm tắt cốt truyện thô.</p>
 
@@ -621,17 +644,29 @@ Trả về CHÍNH XÁC một object JSON:
                 Nạp nội dung từ ô "Bối cảnh & Cốt truyện" ở trên làm <strong>ý tưởng nền bất biến</strong>.
                 Sau khi chốt, chỉnh sửa ô trên sẽ không ảnh hưởng đến bản gốc.
               </p>
-              <button
-                onClick={handleLockFoundation}
-                disabled={!config.context}
-                className={`flex items-center gap-2 px-5 py-2.5 rounded-lg text-sm font-semibold transition-all ${
-                  config.context
-                    ? 'bg-amber-900/40 border border-amber-700/50 hover:bg-amber-800/50 text-amber-300'
-                    : 'bg-neutral-800 border border-neutral-700 text-gray-500 cursor-not-allowed'
-                }`}
-              >
-                <Lock className="w-4 h-4" /> 🔒 Nạp & Chốt Ý Tưởng Nền
-              </button>
+              <div className="flex items-center gap-3 flex-wrap">
+                <button
+                  type="button"
+                  onClick={handleLockFoundation}
+                  disabled={!config.context}
+                  className={`flex items-center gap-2 px-5 py-2.5 rounded-lg text-sm font-semibold transition-all ${
+                    config.context
+                      ? 'bg-amber-900/40 border border-amber-700/50 hover:bg-amber-800/50 text-amber-300'
+                      : 'bg-neutral-800 border border-neutral-700 text-gray-500 cursor-not-allowed'
+                  }`}
+                >
+                  <Lock className="w-4 h-4" /> 🔒 Nạp & Chốt Ý Tưởng Nền
+                </button>
+                <label className="flex items-center gap-1.5 text-[10px] text-gray-400 cursor-pointer select-none">
+                  <input
+                    type="checkbox"
+                    checked={nsfwAnalyze}
+                    onChange={(e) => setNsfwAnalyze(e.target.checked)}
+                    className="w-3.5 h-3.5 accent-red-600"
+                  />
+                  NSFW/18+
+                </label>
+              </div>
             </>
           ) : (
             <div className="space-y-3">
@@ -703,9 +738,9 @@ Trả về CHÍNH XÁC một object JSON:
                         />
                       </div>
 
-                      <div className="flex gap-2">
+                      <div className="flex gap-2 items-center flex-wrap">
                         <button
-                          // ✅ SỬA LỖI TS: Fallback về chuỗi rỗng
+                          type="button"
                           onClick={() => handleAnalyzeFoundation(config.foundationRawIdea || config.foundationIdea || '')}
                           disabled={isAnalyzing}
                           className="flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-xs font-semibold bg-purple-900/40 border border-purple-700/50 hover:bg-purple-800/50 text-purple-300 disabled:opacity-50"
@@ -713,11 +748,21 @@ Trả về CHÍNH XÁC một object JSON:
                           <Wand2 className="w-3.5 h-3.5" /> {isAnalyzing ? 'Đang phân tích lại...' : '🔄 Phân tích lại'}
                         </button>
                         <button
+                          type="button"
                           onClick={handleApplyAnalysisToFoundation}
                           className="flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-xs font-semibold bg-green-900/40 border border-green-700/50 hover:bg-green-800/50 text-green-300"
                         >
-                          <Check className="w-3.5 h-3.5" /> Cập nhật vào Ý tưởng Nền
+                          <Check className="w-3.5 h-3.5" /> {applyFlash ? '✓ Đã cập nhật' : 'Cập nhật vào Ý tưởng Nền'}
                         </button>
+                        <label className="flex items-center gap-1.5 text-[10px] text-gray-400 cursor-pointer select-none">
+                          <input
+                            type="checkbox"
+                            checked={nsfwAnalyze}
+                            onChange={(e) => setNsfwAnalyze(e.target.checked)}
+                            className="w-3.5 h-3.5 accent-red-600"
+                          />
+                          NSFW/18+
+                        </label>
                       </div>
                     </div>
                   )}
@@ -725,6 +770,7 @@ Trả về CHÍNH XÁC một object JSON:
               )}
 
               <button
+                type="button"
                 onClick={handleUnlockFoundation}
                 className="flex items-center gap-2 px-4 py-2 bg-red-950/30 border border-red-800/50 hover:bg-red-900/40 text-red-400 rounded-lg text-xs font-semibold transition-colors"
               >
@@ -811,10 +857,10 @@ Trả về CHÍNH XÁC một object JSON:
 
         {/* Nav buttons */}
         <div className="flex justify-end gap-3 pt-2">
-          <button onClick={() => onNavigate('start')} className="px-5 py-2.5 bg-neutral-800 border border-neutral-700 hover:bg-neutral-700 text-neutral-300 rounded-lg text-sm">
+          <button type="button" onClick={() => onNavigate('start')} className="px-5 py-2.5 bg-neutral-800 border border-neutral-700 hover:bg-neutral-700 text-neutral-300 rounded-lg text-sm">
             Quay Lại
           </button>
-          <button onClick={() => onNavigate('characters')} className="px-6 py-2.5 bg-red-700 hover:bg-red-600 text-white rounded-lg text-sm font-semibold">
+          <button type="button" onClick={() => onNavigate('characters')} className="px-6 py-2.5 bg-red-700 hover:bg-red-600 text-white rounded-lg text-sm font-semibold">
             Thiết Lập Nhân Vật →
           </button>
         </div>
