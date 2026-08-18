@@ -21,6 +21,9 @@ function isRetryableError(error: any): boolean {
   // - Network errors (không có status)
   // - Cold start (timeout/connection)
   // - "ECONNRESET", "ETIMEDOUT", "ENOTFOUND"
+  // - Netlify trả về HTML (index.html fallback) thay vì JSON — thường xảy ra
+  //   ở lần gọi đầu khi function chưa "ấm" (cold start), status vẫn là 200
+  //   nên phải bắt riêng theo nội dung message, không dựa vào status.
   return (
     status === 429 ||
     status === 500 ||
@@ -37,7 +40,9 @@ function isRetryableError(error: any): boolean {
     message.includes('enotfound') ||
     message.includes('fetch') ||
     message.includes('failed to fetch') ||
-    message.includes('network error')
+    message.includes('network error') ||
+    message.includes('html thay vì json') ||
+    message.includes('không phải json hợp lệ')
   );
 }
 

@@ -241,7 +241,16 @@ export interface CustomGenreTag {
   closestPresetId?: string;
 }
 
-// ─── 17. NOVEL CONFIG ──────────────────────────────────────────────────────
+// ─── 17. FOUNDATION ANALYSIS ──────────────────────────────────────────────
+export interface FoundationAnalysis {
+  understanding: string;       // AI tóm tắt lại những gì nó hiểu
+  keyPoints: string;           // các điểm chính, mỗi dòng 1 ý
+  informationLevel: string;    // 'Thiếu' | 'Trung bình' | 'Đủ' | 'Phong phú'
+  missingSuggestions: string;  // gợi ý bổ sung, mỗi dòng 1 ý
+  analyzedAt: number;
+}
+
+// ─── 18. NOVEL CONFIG ──────────────────────────────────────────────────────
 export interface NovelConfig {
   title: string;
   genres: string[];
@@ -265,7 +274,9 @@ export interface NovelConfig {
   
   // ── Foundation ──
   foundationIdea?: string;
+  foundationRawIdea?: string;      // bản gốc lúc chốt, giữ nguyên để build lại foundationIdea
   foundationLockedAt?: number;
+  foundationAnalysis?: FoundationAnalysis;  // AI phân tích bối cảnh
   
   // ── Xưng hô & Address Terms ──
   addressTermSetId?: string;
@@ -276,7 +287,7 @@ export interface NovelConfig {
   [key: string]: any;
 }
 
-// ─── 18. NOVEL RULES ──────────────────────────────────────────────────────
+// ─── 19. NOVEL RULES ──────────────────────────────────────────────────────
 export interface NovelRules {
   forbidden?: string;
   mandatory?: string;
@@ -288,7 +299,7 @@ export interface NovelRules {
   [key: string]: any;
 }
 
-// ─── 19. NOVEL STATE ──────────────────────────────────────────────────────
+// ─── 20. NOVEL STATE ──────────────────────────────────────────────────────
 export interface NovelState {
   config: NovelConfig;
   characters: Character[];
@@ -301,7 +312,7 @@ export interface NovelState {
   [key: string]: any;
 }
 
-// ─── 20. HELPER: FILTER BY CURRENT POINT ─────────────────────────────────
+// ─── 21. HELPER: FILTER BY CURRENT POINT ─────────────────────────────────
 export function filterByCurrentPoint<
   T extends { order?: number; appearedAtOrder?: number; appearedAtPoint?: number; firstAppearanceOrder?: number }
 >(items: T[] | undefined | null, currentOrder?: number): T[] {
@@ -314,7 +325,7 @@ export function filterByCurrentPoint<
   });
 }
 
-// ─── 21. MAKE INITIAL STATE ────────────────────────────────────────────────
+// ─── 22. MAKE INITIAL STATE ────────────────────────────────────────────────
 export const makeInitialState = (title = ''): NovelState => ({
   config: {
     title,
@@ -333,7 +344,9 @@ export const makeInitialState = (title = ''): NovelState => ({
     customTags: [],
     contextAiExpanded: '',
     foundationIdea: '',
+    foundationRawIdea: undefined,
     foundationLockedAt: undefined,
+    foundationAnalysis: undefined,
     addressTermSetId: '',
     customAddressTerms: undefined,
   },
@@ -379,10 +392,10 @@ export const makeInitialState = (title = ''): NovelState => ({
   storyEvents: [],
 });
 
-// ─── 22. DEFAULT STATE ─────────────────────────────────────────────────────
+// ─── 23. DEFAULT STATE ─────────────────────────────────────────────────────
 export const defaultNovelState = makeInitialState();
 
-// ─── 23. MIGRATE NOVEL STATE ──────────────────────────────────────────────
+// ─── 24. MIGRATE NOVEL STATE ──────────────────────────────────────────────
 export function migrateNovelState(raw: any): NovelState {
   if (!raw || typeof raw !== 'object') {
     return makeInitialState();
@@ -430,6 +443,8 @@ export function migrateNovelState(raw: any): NovelState {
       tropeTags: finalTropeTags,
       moodTags: migratedMoodTags,
       customTags,
+      foundationRawIdea: raw.config?.foundationRawIdea || undefined,
+      foundationAnalysis: raw.config?.foundationAnalysis || undefined,
       addressTermSetId: raw.config?.addressTermSetId || '',
       customAddressTerms: raw.config?.customAddressTerms || undefined,
     },

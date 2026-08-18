@@ -30,6 +30,9 @@ export default function Page2Idea({ state, updateState, onNavigate }: Page2IdeaP
   const [customTagSettingId, setCustomTagSettingId] = useState('');
   const [isAiExpanding, setIsAiExpanding] = useState(false);
   const [aiError, setAiError] = useState<string | null>(null);
+  const [isAnalyzing, setIsAnalyzing] = useState(false);
+  const [analysisError, setAnalysisError] = useState<string | null>(null);
+  const [isAnalysisPanelOpen, setIsAnalysisPanelOpen] = useState(true);
   const { config } = state;
 
   // ─── C1: BỐI CẢNH & THỜI ĐẠI ──────────────────────────────────────────────
@@ -185,19 +188,123 @@ Viết một bản mở rộng chi tiết (200-350 chữ) bao gồm:
     });
   };
 
+  // ─── C5.5: AI PHÂN TÍCH Ý TƯỞNG NỀN ──────────────────────────────────
+  const handleAnalyzeFoundation = async (textToAnalyze: string) => {
+    // ✅ SỬA LỖI TS: Chặn gọi với chuỗi rỗng
+    if (!textToAnalyze) return;
+    
+    const activeKey = state.apiKeys.find((k) => k.isActive && !k.quotaExceeded);
+    if (!activeKey) {
+      setAnalysisError('❌ Không tìm thấy API key khả dụng.');
+      setTimeout(() => setAnalysisError(null), 5000);
+      return;
+    }
+
+    setIsAnalyzing(true);
+    setAnalysisError(null);
+
+    try {
+      const systemPrompt = `Bạn là AI kiểm tra mức độ hiểu bối cảnh truyện. Nhiệm vụ KHÔNG phải sáng tạo thêm, mà đọc kỹ đoạn bối cảnh/cốt truyện do người dùng cung cấp và báo cáo trung thực bạn hiểu gì, thiếu gì. Chỉ trả về JSON thuần, không markdown, không giải thích thêm.`;
+
+      const userPrompt = `Đọc kỹ đoạn bối cảnh/cốt truyện sau:
+"""
+${textToAnalyze}
+"""
+
+Trả về CHÍNH XÁC một object JSON:
+{
+  "understanding": "Tóm tắt (150-250 chữ) những gì bạn hiểu: thế giới, nhân vật, tình huống, mâu thuẫn — viết như đang giải thích lại để người dùng kiểm tra AI có hiểu đúng không",
+  "keyPoints": "Các điểm chính AI nắm được, mỗi ý 1 dòng, cách nhau bằng \\n",
+  "informationLevel": "Một trong: Thiếu / Trung bình / Đủ / Phong phú",
+  "missingSuggestions": "Những gì còn thiếu/mơ hồ nên bổ sung, mỗi ý 1 dòng cách nhau bằng \\n — để rỗng nếu không thiếu"
+}`;
+
+      const body: Record<string, any> = {
+        prompt: userPrompt,
+        systemInstruction: systemPrompt,
+        provider: activeKey.provider,
+        customApiKey: activeKey.key,
+      };
+      if (activeKey.customModel) body.customModel = activeKey.customModel;
+      if (['openai', 'claude', 'grok', 'antigravity'].includes(activeKey.provider)) {
+        body.customEndpoint = 'https://ag.beijixingxing.com/v1/chat/completions';
+      }
+      if (activeKey.provider === 'catiecli') {
+        body.customEndpoint = 'https://catiecli.sukaka.top/v1/chat/completions';
+      }
+
+      const data = await callApiWithRetry('generate', body, { maxRetries: 1, baseDelay: 1000 });
+      const raw = (data.text || '').trim().replace(/^```json\s*|```$/g, '').trim();
+      const parsed = JSON.parse(raw);
+
+      updateState((prev) => {
+        prev.config.foundationAnalysis = {
+          understanding: parsed.understanding || '',
+          keyPoints: parsed.keyPoints || '',
+          informationLevel: parsed.informationLevel || 'Trung bình',
+          missingSuggestions: parsed.missingSuggestions || '',
+          analyzedAt: Date.now(),
+        };
+
+        // build lại foundationIdea từ bản gốc thô + nội dung đã xác nhận
+        const base = prev.config.foundationRawIdea || textToAnalyze;
+        let merged = base;
+        if (parsed.understanding) merged += `\n\n[AI hiểu & đã được xác nhận]\n${parsed.understanding}`;
+        if (parsed.keyPoints) merged += `\n\nĐiểm chính:\n${parsed.keyPoints}`;
+        if (parsed.missingSuggestions) merged += `\n\nGhi chú bổ sung:\n${parsed.missingSuggestions}`;
+        prev.config.foundationIdea = merged;
+      });
+      setIsAnalysisPanelOpen(true);
+    } catch (err: any) {
+      setAnalysisError(`❌ Không phân tích được: ${err.message || 'Lỗi không xác định'}`);
+      setTimeout(() => setAnalysisError(null), 6000);
+    } finally {
+      setIsAnalyzing(false);
+    }
+  };
+
+  const handleApplyAnalysisToFoundation = () => {
+    updateState((prev) => {
+      const a = prev.config.foundationAnalysis;
+      if (!a) return;
+      // ✅ SỬA LỖI TS: Fallback về chuỗi rỗng nếu cả 2 đều undefined
+      const base = prev.config.foundationRawIdea || prev.config.foundationIdea || '';
+      let merged = base;
+      if (a.understanding) merged += `\n\n[AI hiểu & đã được xác nhận]\n${a.understanding}`;
+      if (a.keyPoints) merged += `\n\nĐiểm chính:\n${a.keyPoints}`;
+      if (a.missingSuggestions) merged += `\n\nGhi chú bổ sung:\n${a.missingSuggestions}`;
+      prev.config.foundationIdea = merged;
+    });
+  };
+
+  const levelColor = (level?: string) => {
+    switch (level) {
+      case 'Thiếu': return 'text-red-400 bg-red-950/30 border-red-800/50';
+      case 'Trung bình': return 'text-amber-400 bg-amber-950/30 border-amber-800/50';
+      case 'Đủ': return 'text-green-400 bg-green-950/30 border-green-800/50';
+      case 'Phong phú': return 'text-blue-400 bg-blue-950/30 border-blue-800/50';
+      default: return 'text-gray-400 bg-neutral-950/30 border-neutral-800/50';
+    }
+  };
+
   // ─── C6: NẠP & CHỐT Ý TƯỞNG NỀN ──────────────────────────────────────
   const handleLockFoundation = () => {
     if (!config.context) return;
     updateState((prev) => {
       prev.config.foundationIdea = prev.config.context;
+      prev.config.foundationRawIdea = prev.config.context;
       prev.config.foundationLockedAt = Date.now();
     });
+    // ✅ SỬA LỖI TS: Fallback về chuỗi rỗng
+    handleAnalyzeFoundation(config.context || '');
   };
 
   const handleUnlockFoundation = () => {
     updateState((prev) => {
       prev.config.foundationIdea = '';
+      prev.config.foundationRawIdea = undefined;
       prev.config.foundationLockedAt = undefined;
+      prev.config.foundationAnalysis = undefined;
     });
   };
 
@@ -533,6 +640,90 @@ Viết một bản mở rộng chi tiết (200-350 chữ) bao gồm:
                   {config.foundationIdea}
                 </div>
               </div>
+
+              {/* ─── Bảng AI phân tích ─────────────────────────────────── */}
+              {isAnalyzing && !config.foundationAnalysis && (
+                <div className="text-xs text-purple-400 flex items-center gap-2 p-3 bg-purple-950/20 border border-purple-800/30 rounded-lg">
+                  <Wand2 className="w-4 h-4 animate-pulse" /> AI đang đọc và phân tích bối cảnh...
+                </div>
+              )}
+
+              {analysisError && (
+                <div className="p-3 bg-red-950/30 border border-red-800/50 rounded-lg text-xs text-red-300">
+                  {analysisError}
+                </div>
+              )}
+
+              {config.foundationAnalysis && (
+                <div className="border border-purple-800/30 rounded-xl overflow-hidden">
+                  <button
+                    type="button"
+                    onClick={() => setIsAnalysisPanelOpen((v) => !v)}
+                    className="w-full flex items-center justify-between px-4 py-3 bg-purple-950/20 hover:bg-purple-950/30 transition-colors"
+                  >
+                    <span className="text-xs font-bold text-purple-300 flex items-center gap-2">
+                      <Wand2 className="w-3.5 h-3.5" /> AI đã hiểu gì từ bối cảnh này?
+                      <span className={`px-2 py-0.5 rounded-full text-[10px] border ${levelColor(config.foundationAnalysis.informationLevel)}`}>
+                        {config.foundationAnalysis.informationLevel}
+                      </span>
+                    </span>
+                    <span className="text-[10px] text-gray-500">{isAnalysisPanelOpen ? '▲ Thu gọn' : '▼ Mở rộng'}</span>
+                  </button>
+
+                  {isAnalysisPanelOpen && (
+                    <div className="p-4 bg-neutral-950/60 space-y-4">
+                      <div>
+                        <label className="block text-[10px] font-bold text-gray-400 mb-1.5">AI hiểu (sửa lại nếu AI hiểu sai):</label>
+                        <textarea
+                          rows={5}
+                          value={config.foundationAnalysis.understanding}
+                          onChange={(e) => updateState((prev) => { if (prev.config.foundationAnalysis) prev.config.foundationAnalysis.understanding = e.target.value; })}
+                          className="w-full bg-neutral-950 border border-neutral-800 rounded-lg p-2.5 text-xs text-gray-300 leading-relaxed focus:outline-none focus:border-purple-500"
+                        />
+                      </div>
+
+                      <div>
+                        <label className="block text-[10px] font-bold text-gray-400 mb-1.5">Điểm chính AI nắm được (mỗi dòng 1 ý):</label>
+                        <textarea
+                          rows={4}
+                          value={config.foundationAnalysis.keyPoints}
+                          onChange={(e) => updateState((prev) => { if (prev.config.foundationAnalysis) prev.config.foundationAnalysis.keyPoints = e.target.value; })}
+                          className="w-full bg-neutral-950 border border-neutral-800 rounded-lg p-2.5 text-xs text-gray-300 leading-relaxed focus:outline-none focus:border-purple-500"
+                        />
+                      </div>
+
+                      <div>
+                        <label className="block text-[10px] font-bold text-amber-400 mb-1.5">⚠️ Còn thiếu / cần bổ sung (mỗi dòng 1 ý):</label>
+                        <textarea
+                          rows={4}
+                          placeholder="Không có gì cần bổ sung"
+                          value={config.foundationAnalysis.missingSuggestions}
+                          onChange={(e) => updateState((prev) => { if (prev.config.foundationAnalysis) prev.config.foundationAnalysis.missingSuggestions = e.target.value; })}
+                          className="w-full bg-neutral-950 border border-amber-900/40 rounded-lg p-2.5 text-xs text-gray-300 leading-relaxed focus:outline-none focus:border-amber-500"
+                        />
+                      </div>
+
+                      <div className="flex gap-2">
+                        <button
+                          // ✅ SỬA LỖI TS: Fallback về chuỗi rỗng
+                          onClick={() => handleAnalyzeFoundation(config.foundationRawIdea || config.foundationIdea || '')}
+                          disabled={isAnalyzing}
+                          className="flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-xs font-semibold bg-purple-900/40 border border-purple-700/50 hover:bg-purple-800/50 text-purple-300 disabled:opacity-50"
+                        >
+                          <Wand2 className="w-3.5 h-3.5" /> {isAnalyzing ? 'Đang phân tích lại...' : '🔄 Phân tích lại'}
+                        </button>
+                        <button
+                          onClick={handleApplyAnalysisToFoundation}
+                          className="flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-xs font-semibold bg-green-900/40 border border-green-700/50 hover:bg-green-800/50 text-green-300"
+                        >
+                          <Check className="w-3.5 h-3.5" /> Cập nhật vào Ý tưởng Nền
+                        </button>
+                      </div>
+                    </div>
+                  )}
+                </div>
+              )}
+
               <button
                 onClick={handleUnlockFoundation}
                 className="flex items-center gap-2 px-4 py-2 bg-red-950/30 border border-red-800/50 hover:bg-red-900/40 text-red-400 rounded-lg text-xs font-semibold transition-colors"

@@ -7,7 +7,7 @@ import {
 } from 'lucide-react';
 import { NovelState, ApiKeyConfig } from '../types';
 import FanficAnalyzer from './FanficAnalyzer';
-import { callApi } from '../utils/api';
+import { callApi, callApiWithRetry } from '../utils/api';
 
 interface Page1StartProps {
   state: NovelState;
@@ -62,7 +62,7 @@ async function testConnection(key: ApiKeyConfig): Promise<{ ok: boolean; msg: st
       body.customEndpoint = 'https://ag.beijixingxing.com/v1/chat/completions';
     }
     
-    const data = await callApi('generate', body);
+    const data = await callApiWithRetry('generate', body, { maxRetries: 1, baseDelay: 1000 });
     const text = (data.text || '').trim();
     return { ok: true, msg: `✓ OK${text ? ` · "${text.substring(0, 30)}"` : ''}` };
   } catch (err: any) {
@@ -72,10 +72,10 @@ async function testConnection(key: ApiKeyConfig): Promise<{ ok: boolean; msg: st
 
 async function fetchModelsList(apiKey: string, provider: ProviderValue): Promise<string[]> {
   try {
-    const data = await callApi('list-models', {
+    const data = await callApiWithRetry('list-models', {
       customApiKey: apiKey,
       provider: provider,
-    });
+    }, { maxRetries: 1, baseDelay: 1000 });
     
     if (!Array.isArray(data.models) || data.models.length === 0) {
       throw new Error('Không có model nào trả về từ endpoint.');

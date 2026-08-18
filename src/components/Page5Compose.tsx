@@ -11,12 +11,8 @@ import { callApiWithRetry } from '../utils/api';
 import { ADDRESS_TERM_PRESETS, buildAddressTermPrompt } from './addressTerms';
 
 // ─── HẰNG SỐ ──────────────────────────────────────────────────────────────
-const MAX_PREVIEW_LENGTH = 60;
 const MAX_TAIL_LENGTH = 1500;
-const MAX_STORY_EVENTS = 10;
-const MAX_LORE_ENTRIES = 5;
 const MAX_REFERENCE_LENGTH = 500;
-const MAX_CHAT_CONTEXT = 2000;
 
 interface Page5ComposeProps {
   state: NovelState;
@@ -141,19 +137,6 @@ function getWordCount(text: string): number {
   return text.split(/\s+/).filter(Boolean).length;
 }
 
-// ─── getRecentCurrentData: lấy các cập nhật GẦN NHẤT (cuối chuỗi) ──
-function getRecentCurrentData(currentData: string | undefined, maxChars = 200): string {
-  if (!currentData) return '';
-  const entries = currentData.split('\n\n').filter(Boolean);
-  let result = '';
-  for (let i = entries.length - 1; i >= 0; i--) {
-    const next = entries[i] + (result ? '\n\n' + result : '');
-    if (next.length > maxChars && result) break;
-    result = next;
-  }
-  return result;
-}
-
 function formatFileSize(bytes: number): string {
   if (bytes < 1024) return `${bytes} B`;
   if (bytes < 1024 * 1024) return `${(bytes / 1024).toFixed(1)} KB`;
@@ -169,36 +152,52 @@ export function buildSystemInstruction(state: NovelState): string {
   const visibleWorldEntities = filterByCurrentPoint(worldEntities, currentOrder);
   const visibleCharIds = new Set(visibleCharacters.map(c => c.id));
 
-  const charSummary = visibleCharacters.slice(0, 50).map(c => {
+  // ─── NHÂN VẬT — FULL DATA, KHÔNG CẮT ──────────────────────────────────
+  const charSummary = visibleCharacters.map(c => {
     const rels = (c.relationships || [])
       .filter(r => visibleCharIds.has(r.targetCharacterId))
       .map(r => {
         const target = characters.find(t => t.id === r.targetCharacterId);
-        return target ? `${r.relationType}:${target.name}` : '';
+        return target ? `${r.relationType} với ${target.name}${r.description ? ` — ${r.description}` : ''}` : '';
       }).filter(Boolean).join('; ');
-    
-    const personality = c.personality?.slice(0, MAX_PREVIEW_LENGTH) || '';
-    const appearance = c.appearance?.slice(0, MAX_PREVIEW_LENGTH) || '';
-    const abilities = (c.abilities || []).slice(0, 3).map(a => `${a.name}(${a.type})`).join(', ');
-    const fashion = (c.fashionStyles || []).slice(0, 2).map(f => `${f.name}[${f.context}]`).join(', ');
-    const currentData = getRecentCurrentData(c.currentData, 200);
-    
-    return `${c.name}(${c.role},${c.gender})
-  ⚠️ THAM KHẢO — KHÔNG CHÉP NGUYÊN: ${personality ? `Tính cách: ${personality}` : ''} ${appearance ? `Ngoại hình: ${appearance}` : ''}
-  → KHI VIẾT: diễn giải lại bằng câu chữ khác, lồng ghép vào hành động/đối thoại, không dùng lại cụm từ y hệt.
-  ${abilities ? `Kỹ năng:${abilities}` : ''}${fashion ? `, trang phục:${fashion}` : ''}${rels ? `, qh:${rels}` : ''}${currentData ? ` | HIỆN TẠI: ${currentData}` : ''}`;
+
+    const abilities = (c.abilities || []).map(a =>
+      `  • ${a.name}${a.tier ? ` [${a.tier}]` : ''} (${a.type}): ${a.description || ''}${a.condition ? `. Điều kiện: ${a.condition}` : ''}${a.origin ? `. Nguồn gốc: ${a.origin}` : ''}`
+    ).join('\n');
+
+    const fashion = (c.fashionStyles || []).map(f =>
+      `  • ${f.name} [bối cảnh: ${f.context}]: ${f.description}${f.colorPalette ? `. Tông màu: ${f.colorPalette}` : ''}${f.material ? `. Chất liệu: ${f.material}` : ''}${f.significance ? `. Ý nghĩa: ${f.significance}` : ''}`
+    ).join('\n');
+
+    const timeline = (c.timeline || [])
+      .filter(t => currentOrder === undefined || (t.order || 0) <= currentOrder)
+      .sort((a, b) => (a.order || 0) - (b.order || 0))
+      .map(t => `  • [#${t.order}${t.chapterLabel ? ` · ${t.chapterLabel}` : ''}] (${t.category}): ${t.content}${t.relatedCharacterId ? ` [liên quan: ${characters.find(x => x.id === t.relatedCharacterId)?.name || ''}]` : ''}`)
+      .join('\n');
+
+    const imgDescs = (c.images || [])
+      .filter(img => img.description?.trim())
+      .map(img => `  • ${img.label || 'Ảnh'}: ${img.description}`)
+      .join('\n');
+
+    return `### ${c.name} (${c.role}, ${c.gender}, ${c.age} tuổi)
+Tính cách: ${c.personality || 'Chưa mô tả'}
+Ngoại hình: ${c.appearance || 'Chưa mô tả'}
+Quá khứ: ${c.backStory || 'Chưa mô tả'}
+Trạng thái hiện tại: ${c.currentStatus || 'Chưa mô tả'}
+Bí mật/Kinks: ${c.additionalInfo || 'Chưa có'}${rels ? `\nMối quan hệ: ${rels}` : ''}${abilities ? `\nKỹ năng:\n${abilities}` : ''}${fashion ? `\nTrang phục:\n${fashion}` : ''}${timeline ? `\nDòng thời gian riêng:\n${timeline}` : ''}${imgDescs ? `\nẢnh tham chiếu:\n${imgDescs}` : ''}${c.currentData ? `\nDỮ LIỆU HIỆN HỮU (nguồn tham chiếu chính nếu có):\n${c.currentData}` : ''}`;
   }).join('\n\n');
 
+  // ─── SỰ KIỆN CỐT TRUYỆN — FULL CONTENT, KHÔNG GIỚI HẠN SỐ LƯỢNG ───────
   const storyEvents = (state.storyEvents || [])
     .filter(e => currentOrder === undefined || (e.order || 0) <= currentOrder)
     .sort((a, b) => (a.order || 0) - (b.order || 0))
-    .slice(-MAX_STORY_EVENTS)
-    .map(e => `[${e.chapterLabel || ''}] ${e.title || ''}: ${(e.content || '').slice(0, MAX_PREVIEW_LENGTH)}`)
+    .map(e => `[#${e.order}${e.chapterLabel ? ` · ${e.chapterLabel}` : ''}] ${e.title || ''}: ${e.content || ''}`)
     .join('\n');
 
+  // ─── LORE — FULL CONTENT, KHÔNG GIỚI HẠN SỐ LƯỢNG ─────────────────────
   const loreSummary = (rules?.loreEntries ?? [])
-    .slice(-MAX_LORE_ENTRIES)
-    .map(e => `[${e.category}] ${e.title}: ${e.content.slice(0, MAX_PREVIEW_LENGTH)}`)
+    .map(e => `[${e.category}] ${e.title}: ${e.content}`)
     .join('\n');
 
   const addressTermSet = ADDRESS_TERM_PRESETS.find(p => p.id === config.settingId);
@@ -212,7 +211,7 @@ export function buildSystemInstruction(state: NovelState): string {
     refSection = `\n[THAM KHẢO VĂN PHONG — CHỈ để học cách hành văn/giọng kể, TUYỆT ĐỐI KHÔNG lấy chi tiết, tình tiết, bối cảnh, thời gian, địa điểm trong đoạn dưới đây để đưa vào bài viết. Bài viết PHẢI bám theo [ĐANG VIẾT] và [MỆNH LỆNH] trong prompt chính]\n${config.referenceFileContent.substring(0, MAX_REFERENCE_LENGTH)}...`;
   }
   if (config.originalNarrativeVoice) {
-    refSection += `\n\n[GIỌNG KỂ GỐC]\n${config.originalNarrativeVoice.slice(0, 300)}`;
+    refSection += `\n\n[GIỌNG KỂ GỐC]\n${config.originalNarrativeVoice}`;
   }
 
   const existingCharNames = visibleCharacters.map(c => c.name).join(', ') || 'Chưa có';
@@ -221,22 +220,36 @@ export function buildSystemInstruction(state: NovelState): string {
 ⛔ RÀNG BUỘC BỔ SUNG:
 - CHỈ viết theo mệnh lệnh, KHÔNG tự thêm nhân vật/tình tiết
 - KHÔNG nhắc nhân vật chưa xuất hiện: ${existingCharNames}
-- Mô tả nhân vật/thế lực bên dưới là TÀI LIỆU THAM KHẢO, KHÔNG PHẢI cụm từ để chép lại nguyên văn. TUYỆT ĐỐI không lặp lại đúng nguyên cụm mô tả (ví dụ "mỹ nhân bác sĩ") nhiều lần trong bài viết — mỗi lần nhắc tới ngoại hình/thân phận nhân vật, hãy diễn đạt lại bằng câu chữ khác, góc nhìn khác, hoặc lồng ghép tự nhiên vào hành động/đối thoại thay vì lặp thành nhãn dán cố định.
-- TUYỆT ĐỐI KHÔNG tự ý đổi bối cảnh thời gian trong ngày, địa điểm, hoạt động nhân vật đang làm so với đoạn văn được cung cấp trong prompt. Ví dụ: nếu đoạn trước đang ở buổi sáng vừa thức dậy, đoạn viết tiếp PHẢI vẫn là buổi sáng đó — không được tự chuyển thành buổi tối, không tự chèn mô-típ "sau một ngày dài/mệt mỏi" trừ khi mệnh lệnh yêu cầu rõ.`;
+- Mô tả nhân vật/thế lực bên dưới là TÀI LIỆU THAM KHẢO ĐẦY ĐỦ để bạn HIỂU ĐÚNG nhân vật/thế giới, KHÔNG PHẢI cụm từ để chép lại nguyên văn. TUYỆT ĐỐI không lặp lại đúng nguyên cụm mô tả nhiều lần trong bài viết — mỗi lần nhắc tới ngoại hình/thân phận/năng lực nhân vật, hãy diễn đạt lại bằng câu chữ khác, góc nhìn khác, hoặc lồng ghép tự nhiên vào hành động/đối thoại thay vì đọc lại y hệt tài liệu.
+- TUYỆT ĐỐI KHÔNG tự ý đổi bối cảnh thời gian trong ngày, địa điểm, hoạt động nhân vật đang làm so với đoạn văn được cung cấp trong prompt.`;
 
   const timelineNotice = currentOrder !== undefined
     ? `\n[MỐC HIỆN TẠI]: ${config.currentStoryPoint?.label || `#${currentOrder}`}\nCHỈ dùng thông tin ĐẾN mốc này.`
     : '';
 
+  // ─── THẾ LỰC / THỰC THỂ — FULL DATA, KỂ CẢ speciesTraits ──────────────
   const worldSummary = visibleWorldEntities.map(w => {
     const traits = w.speciesTraits;
-    const extra = traits ? ` [${traits.threatLevel}, yếu:${traits.weakness?.slice(0, 20)}, ${traits.abilities?.length || 0} chiêu]` : '';
-    const currentData = getRecentCurrentData(w.currentData, 150);
-    return `${w.name}(${w.type}): ${w.description.slice(0, MAX_PREVIEW_LENGTH)}${extra}${currentData ? ` | HIỆN TẠI: ${currentData}` : ''}`;
-  }).join('\n') || 'Chưa có';
+    let traitsBlock = '';
+    if (traits) {
+      const abilitiesText = (traits.abilities || []).map(a =>
+        `    - ${a.name}: ${a.description}${a.trigger ? ` (Kích hoạt: ${a.trigger})` : ''}`
+      ).join('\n');
+      traitsBlock = `
+  Ngoại hình: ${traits.appearance || ''}${traits.size ? ` | Kích thước: ${traits.size}` : ''}
+  Đặc điểm nhận dạng: ${traits.distinguishing || ''}
+  Tập tính: ${traits.behavior || ''} | Tính khí: ${traits.temperament || ''} | Trí thông minh: ${traits.intelligence || ''}
+  Sinh thái: môi trường ${traits.habitat || ''}, thức ăn ${traits.diet || ''}
+  Điểm yếu: ${traits.weakness || ''}
+  Vật phẩm rơi: ${traits.drops || ''}
+  Cấp độ nguy hiểm: ${traits.threatLevel || ''} | Độ hiếm: ${traits.rarity || ''}${abilitiesText ? `\n  Chiêu sức:\n${abilitiesText}` : ''}`;
+    }
+    const currentData = w.currentData ? `\n  DỮ LIỆU HIỆN HỮU: ${w.currentData}` : '';
+    return `### ${w.name} (${w.type})\n${w.description || 'Chưa có mô tả'}${traitsBlock}${currentData}`;
+  }).join('\n\n') || 'Chưa có';
 
   return `Truyện: ${config.title || 'Chưa đặt tên'} - ${config.genres.join(', ')}
-Bối cảnh: ${config.context?.slice(0, 150) || 'Chưa mô tả'}
+Bối cảnh: ${config.context || 'Chưa mô tả'}
 Văn phong: ${config.writingStyle || ''} ${config.customStyle || ''}
 NSFW: ${config.nsfwEnabled ? 'BẬT' : 'TẮT'}${timelineNotice}
 
@@ -487,20 +500,45 @@ export default function Page5Compose({ state, updateState, onNavigate }: Page5Co
   // ─── buildChatContext ─────────────────────────────────────────────────
   const buildChatContext = useCallback((scope: 'current' | 'all' = 'all'): string => {
     const { config, characters, worldEntities, rules, chapters, storyEvents } = state;
-    
-    const charSummary = characters.slice(0, 30).map(c => {
+
+    const charSummary = characters.map(c => {
+      const rels = (c.relationships || []).map(r => {
+        const target = characters.find(t => t.id === r.targetCharacterId);
+        return target ? `${r.relationType} với ${target.name}` : '';
+      }).filter(Boolean).join('; ');
+
+      const abilities = (c.abilities || []).map(a => `${a.name}(${a.type}): ${a.description || ''}`).join('; ');
+      const fashion = (c.fashionStyles || []).map(f => `${f.name}[${f.context}]: ${f.description}`).join('; ');
       const imgDescs = (c.images || []).filter((img: any) => img.description?.trim())
         .map((img: any) => img.description).join('; ');
-      return `${c.name}(${c.role},${c.gender}): ${c.personality?.slice(0, MAX_PREVIEW_LENGTH)}${imgDescs ? `. ${imgDescs.slice(0, MAX_PREVIEW_LENGTH)}` : ''}`;
-    }).join(' | ');
+      const timeline = (c.timeline || [])
+        .sort((a, b) => (a.order || 0) - (b.order || 0))
+        .map(t => `[#${t.order}](${t.category}): ${t.content}`).join('; ');
 
-    const worldSummary = worldEntities.map(w => `${w.name}(${w.type}): ${w.description.slice(0, MAX_PREVIEW_LENGTH)}`).join(' | ');
-    const loreSummary = (rules.loreEntries || []).slice(-5).map((e: any) => `[${e.category}] ${e.title}: ${e.content.slice(0, MAX_PREVIEW_LENGTH)}`).join(' | ');
-    
+      return `### ${c.name}(${c.role},${c.gender},${c.age})
+Tính cách: ${c.personality || ''}
+Ngoại hình: ${c.appearance || ''}
+Quá khứ: ${c.backStory || ''}
+Hiện tại: ${c.currentStatus || ''}
+Bí mật: ${c.additionalInfo || ''}${rels ? `\nQuan hệ: ${rels}` : ''}${abilities ? `\nKỹ năng: ${abilities}` : ''}${fashion ? `\nTrang phục: ${fashion}` : ''}${imgDescs ? `\nẢnh: ${imgDescs}` : ''}${timeline ? `\nDòng thời gian: ${timeline}` : ''}${c.currentData ? `\nDữ liệu hiện hữu: ${c.currentData}` : ''}`;
+    }).join('\n\n');
+
+    const worldSummary = worldEntities.map(w => {
+      const traits = w.speciesTraits;
+      let traitsText = '';
+      if (traits) {
+        const abilitiesText = (traits.abilities || []).map(a => `${a.name}: ${a.description}`).join('; ');
+        traitsText = ` | Ngoại hình: ${traits.appearance || ''}, Tập tính: ${traits.behavior || ''}, Điểm yếu: ${traits.weakness || ''}, Nguy hiểm: ${traits.threatLevel || ''}${abilitiesText ? `, Chiêu sức: ${abilitiesText}` : ''}`;
+      }
+      return `### ${w.name}(${w.type}): ${w.description || ''}${traitsText}${w.currentData ? ` | Dữ liệu hiện hữu: ${w.currentData}` : ''}`;
+    }).join('\n\n');
+
+    const loreSummary = (rules.loreEntries || []).map((e: any) => `[${e.category}] ${e.title}: ${e.content}`).join('\n');
+
     const storyEventsSummary = (storyEvents || [])
-      .slice(-20)
-      .map(e => `[${e.chapterLabel || ''}] ${e.title || ''}: ${(e.content || '').slice(0, MAX_PREVIEW_LENGTH)}`)
-      .join(' | ');
+      .sort((a, b) => (a.order || 0) - (b.order || 0))
+      .map(e => `[#${e.order}${e.chapterLabel ? ` · ${e.chapterLabel}` : ''}] ${e.title || ''}: ${e.content || ''}`)
+      .join('\n');
 
     let chaptersSummary = '';
     if (scope === 'current' && activeChapter) {
@@ -516,18 +554,19 @@ export default function Page5Compose({ state, updateState, onNavigate }: Page5Co
       }).join('\n\n---\n\n');
     }
 
-    const fullContext = `TRUYỆN: ${config.title || 'Chưa đặt tên'}
+    return `TRUYỆN: ${config.title || 'Chưa đặt tên'}
 THỂ LOẠI: ${config.genres.join(', ')}
-BỐI CẢNH: ${config.context?.slice(0, 150) || 'Chưa mô tả'}
+BỐI CẢNH: ${config.context || 'Chưa mô tả'}
 
-NHÂN VẬT: ${charSummary || 'Chưa có'}
-THẾ LỰC: ${worldSummary || 'Chưa có'}
-${loreSummary ? `LORE: ${loreSummary}` : ''}
-${storyEventsSummary ? `SỰ KIỆN: ${storyEventsSummary}` : ''}
+NHÂN VẬT:
+${charSummary || 'Chưa có'}
+
+THẾ LỰC:
+${worldSummary || 'Chưa có'}
+${loreSummary ? `\nLORE:\n${loreSummary}` : ''}
+${storyEventsSummary ? `\nSỰ KIỆN:\n${storyEventsSummary}` : ''}
 
 ${chaptersSummary}`;
-
-    return fullContext.slice(0, MAX_CHAT_CONTEXT);
   }, [state, activeChapter]);
 
   // ─── handleEventSelect ─────────────────────────────────────────────────
@@ -1010,11 +1049,10 @@ Trả lời câu hỏi của tác giả: phân tích sâu, gợi ý thực tế,
             const words = getWordCount(ch.content);
             return (
               <div key={ch.id} className={`flex items-center justify-between p-2 rounded-lg transition-all border ${isSelected ? 'bg-red-950/20 border-red-900/60 text-red-300' : 'bg-transparent border-transparent hover:bg-neutral-900/40 text-gray-400 hover:text-gray-200'}`}>
-                {/* ✅ FIX: reset pendingSummaryOverwrite khi đổi chương */}
                 <div className="min-w-0 flex-1 pr-1 cursor-pointer" onClick={() => { 
                   updateState(prev => { prev.currentChapterId = ch.id; }); 
                   setPreviousContent(null);
-                  setPendingSummaryOverwrite(false); // ← Reset trạng thái ghi đè
+                  setPendingSummaryOverwrite(false);
                 }}>
                   <div className="flex items-center gap-1 truncate">
                     <span className="text-[8px] font-mono text-gray-600">#{i + 1}</span>
@@ -1053,7 +1091,6 @@ Trả lời câu hỏi của tác giả: phân tích sâu, gợi ý thực tế,
         <div className="flex-1 flex flex-col items-center justify-center py-20 px-4 text-center">
           <PenTool className="w-12 h-12 text-gray-700 mb-4 animate-pulse" />
           <h3 className="text-sm font-bold text-gray-400">Không có chương truyện nào</h3>
-          {/* ✅ FIX: Thêm cảnh báo export khi không có chương */}
           {summaryError && (
             <div className="mt-2 px-4 py-2 bg-amber-950/30 border border-amber-800/40 rounded-xl text-[10px] text-amber-400 flex items-center gap-1.5">
               <AlertCircle className="w-3.5 h-3.5 shrink-0" />
